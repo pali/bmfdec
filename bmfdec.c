@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define INLINE inline
+#define INLINE static inline
 
 typedef uint8_t __u8;
 typedef uint32_t __u32;
