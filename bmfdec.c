@@ -176,6 +176,7 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
   if((dblb_rdn(&bits,16))!=0x5344) return -1;
     
   u=dblb_rdn(&bits,16);
+  u=((u&0xff)<<8)|((u>>8)&0xff);
   LOG_DECOMP("DMSDOS: DS decompression version %d\n",u);
   
   do
@@ -202,7 +203,7 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
 	r=dblb_decrep(&bits,&p,pout,pend,repoffs,-1,flg);
 	break;
     }
-  }while((r==0)&&(p<pend));
+  }while((r==0)&&(p<pend)&&(bits.pd<bits.pe));
   
   if(r<0) return r;
 
