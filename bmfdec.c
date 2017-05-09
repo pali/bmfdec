@@ -242,6 +242,15 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
  * 4 bytes: size of decompressed data (low endian) without this header
  */
 
+/*
+ * Decompressed part of BMF file contains:
+ * 4 bytes: 46 4f 4d 42 - 'F' 'O' 'M' 'B'
+ * 4 bytes: N = size of first part (low endian) since beginning
+ * N-8 bytes: first part data
+ * 16 bytes: 42 4d 4f 46 51 55 41 4c 46 4c 41 56 4f 52 31 31 - "BMOFQUALFLAVOR11"
+ * M bytes: second part data of unknown length
+ */
+
 int main() {
   char pin[0x10000];
   char pout[0x10000];
