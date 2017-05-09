@@ -220,8 +220,8 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
 }
 
 int main() {
-  char pin[0x1000];
-  char pout[0x1000];
+  char pin[0x10000];
+  char pout[0x10000];
   int lin, lout;
   lin = read(0, pin, sizeof(pin));
   if (lin <= 16 || lin == sizeof(pin)) return 1;
