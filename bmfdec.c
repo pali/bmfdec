@@ -234,13 +234,28 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
   return p-(__u8*)pout;
 }
 
+/*
+ * BMF file is compressed by DS-01 algorithm with additional header:
+ * 4 bytes: 46 4f 4d 42 - 'F' 'O' 'M' 'B'
+ * 4 bytes: 01 00 00 00 - version 0x01
+ * 4 bytes: size of compressed data (low endian) without this header
+ * 4 bytes: size of decompressed data (low endian) without this header
+ */
+
 int main() {
   char pin[0x10000];
   char pout[0x10000];
   int lin, lout;
   lin = read(0, pin, sizeof(pin));
-  if (lin <= 16 || lin == sizeof(pin)) return 1;
-  lout = ds_dec(pin+16, lin-16, pout, sizeof(pout), 0);
+  if (lin <= 16 || lin == sizeof(pin) || ((uint32_t *)pin)[0] != 0x424D4F46 || ((uint32_t *)pin)[1] != 0x01 || ((uint32_t *)pin)[2] != (uint32_t)lin-16 || ((uint32_t *)pin)[3] > sizeof(pout)) {
+    fprintf(stderr, "Invalid input\n");
+    return 1;
+  }
+  lout = ((uint32_t *)pin)[3];
+  if (ds_dec(pin+16, lin-16, pout, lout, 0) != lout) {
+    fprintf(stderr, "Decompress failed\n");
+    return 1;
+  }
   if (write(1, pout, lout) != lout) return 1;
   return 0;
 }
