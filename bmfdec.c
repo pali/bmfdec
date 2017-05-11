@@ -248,7 +248,8 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
  * 4 bytes: N = size of first part (low endian) since beginning
  * N-8 bytes: first part data
  * 16 bytes: 42 4d 4f 46 51 55 41 4c 46 4c 41 56 4f 52 31 31 - "BMOFQUALFLAVOR11"
- * M bytes: second part data of unknown length
+ * 4 bytes: M = count of 4 bytes (low endian) after
+ * M*4 bytes: second part data
  */
 
 int main() {
