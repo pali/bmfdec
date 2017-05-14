@@ -218,7 +218,7 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
 	r=dblb_decrep(&bits,&p,pout,pend,repoffs,-1,flg);
 	break;
     }
-  }while((r==0)&&(p<pend)&&(bits.pd<bits.pe));
+  }while((r==0)&&(p<pend)&&(bits.pd<bits.pe||(bits.pd==bits.pe&&bits.pb<16)));
   
   if(r<0) return r;
 
