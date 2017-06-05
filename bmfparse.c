@@ -36,7 +36,8 @@ enum mof_variable_type {
   MOF_VARIABLE_UNKNOWN,
   MOF_VARIABLE_BASIC,
   MOF_VARIABLE_OBJECT,
-  MOF_VARIABLE_ARRAY,
+  MOF_VARIABLE_BASIC_ARRAY,
+  MOF_VARIABLE_OBJECT_ARRAY,
 };
 
 enum mof_basic_type {
@@ -229,23 +230,73 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
   uint32_t *buf2 = (uint32_t *)buf;
   if (size < 20) error("Invalid size");
   uint32_t type = buf2[1];
-  switch (type) {
-  case 0x08: // string
-  case 0x0B: // boolean
-  case 0x13:
-    out.variable_type = MOF_VARIABLE_BASIC;
+  int is_array;
+  switch (type >> 8) {
+  case 0x00:
+    is_array = 0;
     break;
-  case 0x0D:
-    out.variable_type = MOF_VARIABLE_OBJECT;
-    break;
-  case 0x2011:
-    out.variable_type = MOF_VARIABLE_ARRAY;
+  case 0x20:
+    is_array = 1;
     break;
   default:
     fprintf(stderr, "Warning: unknown variable type 0x%x\n", type);
     fprintf(stderr, "Hexdump:\n");
     dump_bytes(buf, size);
     return out;
+  }
+  switch (type & 0xFF) {
+  case 0x02:
+    out.type.basic = MOF_BASIC_TYPE_SINT16;
+    break;
+  case 0x03:
+    out.type.basic = MOF_BASIC_TYPE_SINT32;
+    break;
+  case 0x08:
+    out.type.basic = MOF_BASIC_TYPE_STRING;
+    break;
+  case 0x0B:
+    out.type.basic = MOF_BASIC_TYPE_BOOLEAN;
+    break;
+  case 0x10:
+    out.type.basic = MOF_BASIC_TYPE_SINT8;
+    break;
+  case 0x11:
+    out.type.basic = MOF_BASIC_TYPE_UINT8;
+    break;
+  case 0x12:
+    out.type.basic = MOF_BASIC_TYPE_UINT16;
+    break;
+  case 0x13:
+    out.type.basic = MOF_BASIC_TYPE_UINT32;
+    break;
+  case 0x14:
+    out.type.basic = MOF_BASIC_TYPE_SINT64;
+    break;
+  case 0x15:
+    out.type.basic = MOF_BASIC_TYPE_UINT64;
+    break;
+  case 0x65:
+    out.type.basic = MOF_BASIC_TYPE_DATETIME;
+    break;
+  case 0x0D:
+    // object
+    break;
+  default:
+    fprintf(stderr, "Warning: unknown variable type 0x%x\n", type);
+    fprintf(stderr, "Hexdump:\n");
+    dump_bytes(buf, size);
+    return out;
+  }
+  if ((type & 0xFF) == 0x0D) {
+    if (is_array)
+      out.variable_type = MOF_VARIABLE_OBJECT_ARRAY;
+    else
+      out.variable_type = MOF_VARIABLE_OBJECT;
+  } else {
+    if (is_array)
+      out.variable_type = MOF_VARIABLE_BASIC_ARRAY;
+    else
+      out.variable_type = MOF_VARIABLE_BASIC;
   }
   if (buf2[2] != 0x0 || buf2[3] != 0xFFFFFFFF) error("Invalid unknown");
   uint32_t len = buf2[4];
@@ -267,7 +318,7 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
     out.qualifiers[out.qualifiers_count] = parse_qualifier(tmp, len2);
     if (out.qualifiers[out.qualifiers_count].name) {
       if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_STRING && strcmp(out.qualifiers[out.qualifiers_count].name, "CIMTYPE") == 0) {
-        if (out.variable_type == MOF_VARIABLE_OBJECT) {
+        if (out.variable_type == MOF_VARIABLE_OBJECT || out.variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
           if (strncmp(out.qualifiers[out.qualifiers_count].value.string, "object:", strlen("object:")) == 0) {
             out.type.object = out.qualifiers[out.qualifiers_count].value.string + strlen("object:");
             free(out.qualifiers[out.qualifiers_count].name);
@@ -277,34 +328,36 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
           }
         } else {
           char *strtype = out.qualifiers[out.qualifiers_count].value.string;
+          enum mof_basic_type basic_type;
           if (strcmp(strtype, "String") == 0 || strcmp(strtype, "string") == 0)
-            out.type.basic = MOF_BASIC_TYPE_STRING;
+            basic_type = MOF_BASIC_TYPE_STRING;
           else if (strcmp(strtype, "sint32") == 0)
-            out.type.basic = MOF_BASIC_TYPE_SINT32;
+            basic_type = MOF_BASIC_TYPE_SINT32;
           else if (strcmp(strtype, "uint32") == 0)
-            out.type.basic = MOF_BASIC_TYPE_UINT32;
+            basic_type = MOF_BASIC_TYPE_UINT32;
           else if (strcmp(strtype, "sint16") == 0)
-            out.type.basic = MOF_BASIC_TYPE_SINT16;
+            basic_type = MOF_BASIC_TYPE_SINT16;
           else if (strcmp(strtype, "uint16") == 0)
-            out.type.basic = MOF_BASIC_TYPE_UINT16;
+            basic_type = MOF_BASIC_TYPE_UINT16;
           else if (strcmp(strtype, "sint64") == 0)
-            out.type.basic = MOF_BASIC_TYPE_SINT64;
+            basic_type = MOF_BASIC_TYPE_SINT64;
           else if (strcmp(strtype, "uint64") == 0)
-            out.type.basic = MOF_BASIC_TYPE_UINT64;
+            basic_type = MOF_BASIC_TYPE_UINT64;
           else if (strcmp(strtype, "sint8") == 0)
-            out.type.basic = MOF_BASIC_TYPE_SINT8;
+            basic_type = MOF_BASIC_TYPE_SINT8;
           else if (strcmp(strtype, "uint8") == 0)
-            out.type.basic = MOF_BASIC_TYPE_UINT8;
+            basic_type = MOF_BASIC_TYPE_UINT8;
           else if (strcmp(strtype, "Datetime") == 0 || strcmp(strtype, "datetime") == 0)
-            out.type.basic = MOF_BASIC_TYPE_DATETIME;
+            basic_type = MOF_BASIC_TYPE_DATETIME;
           else if (strcmp(strtype, "Boolean") == 0 || strcmp(strtype, "boolean") == 0)
-            out.type.basic = MOF_BASIC_TYPE_BOOLEAN;
+            basic_type = MOF_BASIC_TYPE_BOOLEAN;
           else
             error("unknown basic type");
           free(out.qualifiers[out.qualifiers_count].value.string);
           free(out.qualifiers[out.qualifiers_count].name);
+          if (basic_type != out.type.basic) error("basic type does not match");
         }
-      } else if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_NUMERIC && strcmp(out.qualifiers[out.qualifiers_count].name, "MAX") == 0 && out.variable_type == MOF_VARIABLE_ARRAY) {
+      } else if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_NUMERIC && strcmp(out.qualifiers[out.qualifiers_count].name, "MAX") == 0 && is_array) {
         out.array = out.qualifiers[out.qualifiers_count].value.numeric;
         free(out.qualifiers[out.qualifiers_count].name);
       } else {
@@ -533,11 +586,13 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
   }
 }
 
-static char *get_variable_type(struct mof_variable *variable) {
-  char *type = "unknown";
+static void print_variable_type(struct mof_variable *variable) {
+  char *variable_type = "unknown";
+  char *type = NULL;
   switch (variable->variable_type) {
   case MOF_VARIABLE_BASIC:
-  case MOF_VARIABLE_ARRAY:
+  case MOF_VARIABLE_BASIC_ARRAY:
+    variable_type = "Basic";
     switch (variable->type.basic) {
     case MOF_BASIC_TYPE_STRING: type = "String"; break;
     case MOF_BASIC_TYPE_SINT32: type = "sint32"; break;
@@ -554,26 +609,28 @@ static char *get_variable_type(struct mof_variable *variable) {
     }
     break;
   case MOF_VARIABLE_OBJECT:
+  case MOF_VARIABLE_OBJECT_ARRAY:
+    variable_type = "Object";
     type = variable->type.object;
     break;
   default:
-    type = "unknown";
     break;
   }
-  return type;
+  printf("%s", variable_type);
+  if (type)
+    printf(":%s", type);
+  if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY)
+    printf("[%d]", variable->array);
 }
 
 static void print_variables(struct mof_variable *variables, uint32_t count, int indent, char *name) {
   uint32_t i;
-  char *type;
   for (i = 0; i < count; ++i) {
     printf("%*.s%s %d:\n", indent, "", name, i);
     printf("%*.s  Name=%s\n", indent, "", variables[i].name);
-    type = get_variable_type(&variables[i]);
-    if (variables[i].variable_type == MOF_VARIABLE_ARRAY)
-      printf("%*.s  Type=%s[%d]\n", indent, "", type, variables[i].array);
-    else
-      printf("%*.s  Type=%s\n", indent, "", type);
+    printf("%*.s  Type=", indent, "");
+    print_variable_type(&variables[i]);
+    printf("\n");
     print_qualifiers(variables[i].qualifiers, variables[i].qualifiers_count, 4);
   }
 }
@@ -594,7 +651,12 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       print_variables(classes[i].methods[j].inputs, classes[i].methods[j].inputs_count, 4, "Input parameter");
       print_variables(classes[i].methods[j].outputs, classes[i].methods[j].outputs_count, 4, "Output parameter");
       printf("    Return value:\n");
-      printf("      Type=%s\n", classes[i].methods[j].return_value.variable_type ? get_variable_type(&classes[i].methods[j].return_value) : "void");
+      printf("      Type=");
+      if (classes[i].methods[j].return_value.variable_type)
+         print_variable_type(&classes[i].methods[j].return_value);
+      else
+         printf("Void");
+      printf("\n");
     }
   }
 }
