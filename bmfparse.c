@@ -27,8 +27,8 @@
 
 enum mof_qualifier_type {
   MOF_QUALIFIER_UNKNOWN,
-  MOF_QUALIFIER_VOID,
-  MOF_QUALIFIER_NUMERIC,
+  MOF_QUALIFIER_BOOLEAN,
+  MOF_QUALIFIER_SINT32,
   MOF_QUALIFIER_STRING,
 };
 
@@ -59,7 +59,8 @@ struct mof_qualifier {
   enum mof_qualifier_type type;
   char *name;
   union {
-    uint32_t numeric;
+    uint8_t boolean;
+    int32_t sint32;
     char *string;
   } value;
 };
@@ -73,7 +74,7 @@ struct mof_variable {
     enum mof_basic_type basic;
     char *object;
   } type;
-  uint32_t array;
+  int32_t array;
 };
 
 struct mof_method {
@@ -159,21 +160,22 @@ static void dump_bytes(char *buf, uint32_t size) {
   }
 }
 
-static struct mof_qualifier parse_qualifier_void(char *buf, uint32_t size, uint32_t val) {
+static struct mof_qualifier parse_qualifier_boolean(char *buf, uint32_t size, uint32_t val) {
   struct mof_qualifier out;
   memset(&out, 0, sizeof(out));
-  if (val != 0xFFFF) error("Invalid unknown");
-  out.type = MOF_QUALIFIER_VOID;
+  if (val != 0 && val != 0xFFFF) error("Invalid boolean");
+  out.type = MOF_QUALIFIER_BOOLEAN;
   out.name = parse_string(buf, size);
+  out.value.boolean = val ? 1 : 0;
   return out;
 }
 
-static struct mof_qualifier parse_qualifier_numeric(char *buf, uint32_t size, uint32_t val) {
+static struct mof_qualifier parse_qualifier_sint32(char *buf, uint32_t size, int32_t val) {
   struct mof_qualifier out;
   memset(&out, 0, sizeof(out));
-  out.type = MOF_QUALIFIER_NUMERIC;
+  out.type = MOF_QUALIFIER_SINT32;
   out.name = parse_string(buf, size);
-  out.value.numeric = val;
+  out.value.sint32 = val;
   return out;
 }
 
@@ -194,19 +196,14 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size) {
   uint32_t type = buf2[1];
   uint32_t len = buf2[3];
   if (len+16 > size) error("Invalid size");
-  uint32_t val = 0xFFFF;
-  if (len+16+4 > size)
-    fprintf(stderr, "Warning: no qualifier value, using 0xFFFF\n");
-  else
-    val = *((uint32_t *)(buf+16+len));
   switch (type) {
   case 0x0B:
-    out = parse_qualifier_void(buf+16, len, val);
-    if (16+len+4 < size) error("Buffer not processed");
+    if (16+len+4 < size) error("Invalid size");
+    out = parse_qualifier_boolean(buf+16, len, 16+len+4 > size ? 0xFFFF : *((uint32_t *)(buf+16+len)));
     break;
   case 0x03:
-    out = parse_qualifier_numeric(buf+16, len, val);
-    if (16+len+4 < size) error("Buffer not processed");
+    if (len+16+4 != size) error("Invalid size");
+    out = parse_qualifier_sint32(buf+16, len, *((int32_t *)(buf+16+len)));
     break;
   case 0x08:
     out = parse_qualifier_string(buf+16, len, buf+16+len, size-len-16);
@@ -357,8 +354,8 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
           free(out.qualifiers[out.qualifiers_count].name);
           if (basic_type != out.type.basic) error("basic type does not match");
         }
-      } else if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_NUMERIC && strcmp(out.qualifiers[out.qualifiers_count].name, "MAX") == 0 && is_array) {
-        out.array = out.qualifiers[out.qualifiers_count].value.numeric;
+      } else if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_SINT32 && strcmp(out.qualifiers[out.qualifiers_count].name, "MAX") == 0 && is_array) {
+        out.array = out.qualifiers[out.qualifiers_count].value.sint32;
         free(out.qualifiers[out.qualifiers_count].name);
       } else {
         out.qualifiers_count++;
@@ -406,7 +403,9 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
   for (i=0; i<count; ++i) {
     for (j=0; j<parameters[i].variables_count; ++j) {
       for (k=0; k<parameters[i].variables[j].qualifiers_count; ++k) {
-        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_VOID)
+        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_BOOLEAN)
+          continue;
+        if (!parameters[i].variables[j].qualifiers[k].value.boolean)
           continue;
         if (strcmp(parameters[i].variables[j].qualifiers[k].name, "in") == 0)
           ++inputs_count;
@@ -427,7 +426,9 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
   for (i=0; i<count; ++i) {
     for (j=0; j<parameters[i].variables_count; ++j) {
       for (k=0; k<parameters[i].variables[j].qualifiers_count; ++k) {
-        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_VOID)
+        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_BOOLEAN)
+          continue;
+        if (!parameters[i].variables[j].qualifiers[k].value.boolean)
           continue;
         if (strcmp(parameters[i].variables[j].qualifiers[k].name, "in") == 0)
           out->inputs[inputs_count++] = parameters[i].variables[j];
@@ -647,12 +648,13 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
     printf("%*.sQualifier %u:\n", indent, "", i);
     printf("%*.s  Name=%s\n", indent, "", qualifiers[i].name);
     switch (qualifiers[i].type) {
-    case MOF_QUALIFIER_VOID:
-      printf("%*.s  Type=Void\n", indent, "");
+    case MOF_QUALIFIER_BOOLEAN:
+      printf("%*.s  Type=Boolean\n", indent, "");
+      printf("%*.s  Value=%s\n", indent, "", qualifiers[i].value.boolean ? "TRUE" : "FALSE");
       break;
-    case MOF_QUALIFIER_NUMERIC:
+    case MOF_QUALIFIER_SINT32:
       printf("%*.s  Type=Numeric\n", indent, "");
-      printf("%*.s  Value=%u\n", indent, "", qualifiers[i].value.numeric);
+      printf("%*.s  Value=%d\n", indent, "", qualifiers[i].value.sint32);
       break;
     case MOF_QUALIFIER_STRING:
       printf("%*.s  Type=String\n", indent, "");
@@ -700,7 +702,7 @@ static void print_variable_type(struct mof_variable *variable, int with_info) {
     if (type)
       printf(":%s", type);
     if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY)
-      printf("[%u]", variable->array);
+      printf("[%d]", variable->array);
   } else {
     printf("%s", type ? type : "unknown");
   }

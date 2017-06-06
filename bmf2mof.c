@@ -28,11 +28,13 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
     printf("[");
     for (i = 0; i < count; ++i) {
       switch (qualifiers[i].type) {
-      case MOF_QUALIFIER_VOID:
+      case MOF_QUALIFIER_BOOLEAN:
         printf("%s", qualifiers[i].name);
+        if (!qualifiers[i].value.boolean)
+          printf("(FALSE)");
         break;
-      case MOF_QUALIFIER_NUMERIC:
-        printf("%s(%u)", qualifiers[i].name, qualifiers[i].value.numeric);
+      case MOF_QUALIFIER_SINT32:
+        printf("%s(%d)", qualifiers[i].name, qualifiers[i].value.sint32);
         break;
       case MOF_QUALIFIER_STRING:
         printf("%s(\"%s\")", qualifiers[i].name, qualifiers[i].value.string);
@@ -56,7 +58,7 @@ static void print_variable(struct mof_variable *variable) {
   print_variable_type(variable, 0);
   printf(" %s", variable->name);
   if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY)
-    printf("[%u]", variable->array);
+    printf("[%d]", variable->array);
 }
 
 static void print_classes(struct mof_class *classes, uint32_t count) {
