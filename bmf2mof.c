@@ -22,6 +22,16 @@
 #undef print_classes
 #undef print_qualifiers
 
+static void print_string(char *str) {
+  int len = strlen(str);
+  int i;
+  for (i=0; i<len; ++i) {
+    if (str[i] == '"' || str[i] == '\\')
+      putchar('\\');
+    putchar(str[i]);
+  }
+}
+
 static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, int indent) {
   uint32_t i;
   if (count > 0) {
@@ -29,15 +39,19 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
     for (i = 0; i < count; ++i) {
       switch (qualifiers[i].type) {
       case MOF_QUALIFIER_BOOLEAN:
-        printf("%s", qualifiers[i].name);
+        print_string(qualifiers[i].name);
         if (!qualifiers[i].value.boolean)
           printf("(FALSE)");
         break;
       case MOF_QUALIFIER_SINT32:
-        printf("%s(%d)", qualifiers[i].name, qualifiers[i].value.sint32);
+        print_string(qualifiers[i].name);
+        printf("(%d)", qualifiers[i].value.sint32);
         break;
       case MOF_QUALIFIER_STRING:
-        printf("%s(\"%s\")", qualifiers[i].name, qualifiers[i].value.string);
+        print_string(qualifiers[i].name);
+        printf("(\"");
+        print_string(qualifiers[i].value.string);
+        printf("\")");
         break;
       default:
         printf("unknown");
@@ -56,7 +70,8 @@ static void print_variable(struct mof_variable *variable) {
     printf(" ");
   }
   print_variable_type(variable, 0);
-  printf(" %s", variable->name);
+  printf(" ");
+  print_string(variable->name);
   if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY)
     printf("[%d]", variable->array);
 }
@@ -69,9 +84,14 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 0);
       printf("\n");
     }
-    printf("class %s ", classes[i].name);
-    if (classes[i].superclassname)
-      printf(": %s ", classes[i].superclassname);
+    printf("class ");
+    print_string(classes[i].name);
+    printf(" ");
+    if (classes[i].superclassname) {
+      printf(": ");
+      print_string(classes[i].superclassname);
+      printf(" ");
+    }
     printf("{\n");
     for (j = 0; j < classes[i].variables_count; ++j) {
       printf("  ");
@@ -90,7 +110,9 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
         print_variable_type(&classes[i].methods[j].return_value, 0);
       else
         printf("void");
-      printf(" %s(", classes[i].methods[j].name);
+      printf(" ");
+      print_string(classes[i].methods[j].name);
+      printf("(");
       // TODO: fix order of parameters
       for (k = 0; k < classes[i].methods[j].inputs_count; ++k) {
         print_variable(&classes[i].methods[j].inputs[k]);
