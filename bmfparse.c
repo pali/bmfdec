@@ -81,10 +81,8 @@ struct mof_method {
   uint32_t qualifiers_count;
   struct mof_qualifier *qualifiers;
   char *name;
-  uint32_t inputs_count;
-  struct mof_variable *inputs;
-  uint32_t outputs_count;
-  struct mof_variable *outputs;
+  uint32_t parameters_count;
+  struct mof_variable *parameters;
   struct mof_variable return_value;
 };
 
@@ -369,6 +367,38 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
 
 static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size1, int with_qualifiers);
 
+static int cmp_qualifiers(struct mof_qualifier *a, struct mof_qualifier *b) {
+  if (strcmp(a->name, b->name) != 0 || a->type != b->type)
+    return 1;
+  switch (a->type) {
+  case MOF_QUALIFIER_BOOLEAN:
+    return (a->value.boolean != b->value.boolean) ? 1 : 0;
+  case MOF_QUALIFIER_SINT32:
+    return (a->value.sint32 != b->value.sint32) ? 1 : 0;
+  case MOF_QUALIFIER_STRING:
+    return strcmp(a->value.string, b->value.string) ? 1 : 0;
+  default:
+    return 1;
+  }
+}
+
+static int cmp_variables(struct mof_variable *a, struct mof_variable *b) {
+  if (strcmp(a->name, b->name) != 0 || a->variable_type != b->variable_type)
+    return 1;
+  if ((a->variable_type == MOF_VARIABLE_BASIC_ARRAY || a->variable_type == MOF_VARIABLE_OBJECT_ARRAY) && a->array != b->array)
+    return 1;
+  switch (a->variable_type) {
+  case MOF_VARIABLE_BASIC:
+  case MOF_VARIABLE_BASIC_ARRAY:
+    return (a->type.basic != b->type.basic) ? 1 : 0;
+  case MOF_VARIABLE_OBJECT:
+  case MOF_VARIABLE_OBJECT_ARRAY:
+    return strcmp(a->type.object, b->type.object) ? 1 : 0;
+  default:
+    return 1;
+  }
+}
+
 static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_method *out) {
   struct mof_class *parameters;
   uint32_t *buf2 = (uint32_t *)buf;
@@ -397,48 +427,86 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
     if (strcmp(parameters[i].name, "__PARAMETERS") != 0) error("Invalid parameters class name");
     tmp += len1;
   }
-  uint32_t inputs_count = 0;
-  uint32_t outputs_count = 0;
+  uint32_t variables_count = 0;
+  for (i=0; i<count; ++i) {
+    variables_count += parameters[i].variables_count;
+  }
+  uint8_t *parameters_map = calloc(variables_count, sizeof(uint8_t));
+  if (!parameters_map) error("calloc failed");
   uint32_t j, k;
   for (i=0; i<count; ++i) {
     for (j=0; j<parameters[i].variables_count; ++j) {
+      int processed = 0;
       for (k=0; k<parameters[i].variables[j].qualifiers_count; ++k) {
-        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_BOOLEAN)
+        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_SINT32)
           continue;
-        if (!parameters[i].variables[j].qualifiers[k].value.boolean)
+        if (strcmp(parameters[i].variables[j].qualifiers[k].name, "ID") != 0)
           continue;
-        if (strcmp(parameters[i].variables[j].qualifiers[k].name, "in") == 0)
-          ++inputs_count;
-        else if (strcmp(parameters[i].variables[j].qualifiers[k].name, "out") == 0)
-          ++outputs_count;
+        if (processed) error("parameter has more IDs");
+        int32_t id = parameters[i].variables[j].qualifiers[k].value.sint32;
+        if (id < 0 || (uint32_t)id >= variables_count) error("invalid parameter ID");
+        parameters_map[id] = 1;
+        processed = 1;
       }
+      int return_value = (strcmp(parameters[i].variables[j].name, "ReturnValue") == 0) ? 1 : 0;
+      if (!(processed ^ return_value)) error("variable is not parameter nor return value");
     }
   }
-  out->inputs_count = inputs_count;
-  out->inputs = calloc(inputs_count, sizeof(*out->inputs));
-  inputs_count = 0;
-  if (!out->inputs) error("calloc failed");
-  out->outputs_count = outputs_count;
-  out->outputs = calloc(outputs_count, sizeof(*out->outputs));
-  outputs_count = 0;
-  if (!out->outputs) error("calloc failed");
+  uint32_t parameters_count = (variables_count && parameters_map[0]) ? 1 : 0;
+  for (i=1; i<variables_count; ++i) {
+    if (parameters_map[i]) {
+      if (!parameters_map[i-1]) error("some parameters are missing");
+      parameters_count = i+1;
+    }
+  }
+  out->parameters_count = parameters_count;
+  out->parameters = calloc(parameters_count, sizeof(*out->parameters));
+  if (!out->parameters) error("calloc failed");
   int has_return_value = 0;
   for (i=0; i<count; ++i) {
     for (j=0; j<parameters[i].variables_count; ++j) {
+      int32_t id = -1;
       for (k=0; k<parameters[i].variables[j].qualifiers_count; ++k) {
-        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_BOOLEAN)
+        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_SINT32)
           continue;
-        if (!parameters[i].variables[j].qualifiers[k].value.boolean)
+        if (strcmp(parameters[i].variables[j].qualifiers[k].name, "ID") != 0)
           continue;
-        if (strcmp(parameters[i].variables[j].qualifiers[k].name, "in") == 0)
-          out->inputs[inputs_count++] = parameters[i].variables[j];
-        else if (strcmp(parameters[i].variables[j].qualifiers[k].name, "out") == 0)
-          out->outputs[outputs_count++] = parameters[i].variables[j];
+        id = parameters[i].variables[j].qualifiers[k].value.sint32;
+        break;
       }
-      if (strcmp(parameters[i].variables[j].name, "ReturnValue") == 0) {
+      if (id != -1) {
+        if (parameters_map[id] == 2) {
+        if (cmp_variables(&out->parameters[id], &parameters[i].variables[j]) != 0) error("two variables at same position");
+          out->parameters[id].qualifiers = realloc(out->parameters[id].qualifiers, (out->parameters[id].qualifiers_count+parameters[i].variables[j].qualifiers_count-1)*sizeof(*out->parameters[id].qualifiers));
+          if (!out->parameters[id].qualifiers) error("realloc failed");
+        } else {
+          out->parameters[id] = parameters[i].variables[j];
+          out->parameters[id].qualifiers_count = 0;
+          out->parameters[id].qualifiers = calloc(parameters[i].variables[j].qualifiers_count-1, sizeof(*out->parameters[id].qualifiers));
+          parameters_map[id] = 2;
+        }
+        for (k=0; k<parameters[i].variables[j].qualifiers_count; ++k) {
+          if (parameters[i].variables[j].qualifiers[k].type == MOF_QUALIFIER_SINT32 &&
+              strcmp(parameters[i].variables[j].qualifiers[k].name, "ID") == 0)
+            continue;
+          int skip = 0;
+          uint32_t l;
+          for (l=0; l<out->parameters[id].qualifiers_count; ++l) {
+            if (cmp_qualifiers(&out->parameters[id].qualifiers[l], &parameters[i].variables[j].qualifiers[k]) == 0) {
+              skip = 1;
+              break;
+            }
+          }
+          if (skip)
+            continue;
+          out->parameters[id].qualifiers[out->parameters[id].qualifiers_count++] = parameters[i].variables[j].qualifiers[k];
+        }
+      } else if (strcmp(parameters[i].variables[j].name, "ReturnValue") == 0) {
         if (has_return_value) error("multiple return values");
         out->return_value = parameters[i].variables[j];
         has_return_value = 1;
+      } else {
+        error("variable is not parameter nor return value");
       }
     }
   }
@@ -733,8 +801,6 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       printf("  Method %u:\n", j);
       printf("    Name=%s\n", classes[i].methods[j].name);
       print_qualifiers(classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, 4);
-      print_variables(classes[i].methods[j].inputs, classes[i].methods[j].inputs_count, 4, "Input parameter");
-      print_variables(classes[i].methods[j].outputs, classes[i].methods[j].outputs_count, 4, "Output parameter");
       printf("    Return value:\n");
       printf("      Type=");
       if (classes[i].methods[j].return_value.variable_type)
@@ -742,6 +808,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       else
          printf("Void");
       printf("\n");
+      print_variables(classes[i].methods[j].parameters, classes[i].methods[j].parameters_count, 4, "Parameter");
     }
   }
 }

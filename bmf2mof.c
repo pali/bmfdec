@@ -113,15 +113,9 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       printf(" ");
       print_string(classes[i].methods[j].name);
       printf("(");
-      // TODO: fix order of parameters
-      for (k = 0; k < classes[i].methods[j].inputs_count; ++k) {
-        print_variable(&classes[i].methods[j].inputs[k]);
-        if (k != classes[i].methods[j].inputs_count-1 || classes[i].methods[j].outputs_count)
-          printf(", ");
-      }
-      for (k = 0; k < classes[i].methods[j].outputs_count; ++k) {
-        print_variable(&classes[i].methods[j].outputs[k]);
-        if (k != classes[i].methods[j].outputs_count-1)
+      for (k = 0; k < classes[i].methods[j].parameters_count; ++k) {
+        print_variable(&classes[i].methods[j].parameters[k]);
+        if (k != classes[i].methods[j].parameters_count-1)
           printf(", ");
       }
       printf(");\n");
