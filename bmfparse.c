@@ -706,7 +706,13 @@ static struct mof_classes parse_bmf(char *buf, uint32_t size) {
   if (((uint32_t *)buf)[0] != 0x424D4F46) error("Invalid magic header");
   uint32_t len = ((uint32_t *)buf)[1];
   if (len > size) error("Invalid size");
-  // TODO: parse BMOFQUALFLAVOR11
+  if (len < size) {
+    if (size-len < 20) error("Invalid size");
+    if (memcmp(buf+len, "BMOFQUALFLAVOR11", 16) != 0) error("Invalid second magic header");
+    uint32_t count = ((uint32_t *)(buf+len+16))[0];
+    if (8*count != size-len-16-4) error("Invalid size");
+    // TODO: parse BMOFQUALFLAVOR11 at buf+len+16+4 with size 8*count
+  }
   return parse_root(buf+8, len-8);
 }
 
