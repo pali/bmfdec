@@ -79,7 +79,11 @@ static void print_variable(struct mof_variable *variable) {
 static void print_classes(struct mof_class *classes, uint32_t count) {
   uint32_t i, j, k;
   for (i = 0; i < count; ++i) {
-    // TODO: namespace
+    if (classes[i].namespace && strcmp(classes[i].namespace, "root\\default") != 0) {
+      printf("#pragma namespace(\"");
+      print_string(classes[i].namespace);
+      printf("\")\n");
+    }
     if (classes[i].qualifiers_count > 0) {
       print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 0);
       printf("\n");
