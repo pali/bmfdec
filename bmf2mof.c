@@ -17,9 +17,11 @@
 */
 
 #define print_classes bmfparse_print_classes
+#define print_variable bmfparse_print_variable
 #define print_qualifiers bmfparse_print_qualifiers
 #include "bmfparse.c"
 #undef print_classes
+#undef print_variable
 #undef print_qualifiers
 
 static void print_string(char *str) {
@@ -32,10 +34,15 @@ static void print_string(char *str) {
   }
 }
 
-static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, int indent) {
+static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, int indent, char *prefix) {
   uint32_t i;
-  if (count > 0) {
+  if (count > 0 || prefix) {
     printf("[");
+    if (prefix) {
+      printf("%s", prefix);
+      if (count > 0)
+        printf(", ");
+    }
     for (i = 0; i < count; ++i) {
       switch (qualifiers[i].type) {
       case MOF_QUALIFIER_BOOLEAN:
@@ -64,9 +71,9 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
   }
 }
 
-static void print_variable(struct mof_variable *variable) {
-  if (variable->qualifiers_count > 0) {
-    print_qualifiers(variable->qualifiers, variable->qualifiers_count, 0);
+static void print_variable(struct mof_variable *variable, char *prefix) {
+  if (variable->qualifiers_count > 0 || prefix) {
+    print_qualifiers(variable->qualifiers, variable->qualifiers_count, 0, prefix);
     printf(" ");
   }
   print_variable_type(variable, 0);
@@ -77,6 +84,7 @@ static void print_variable(struct mof_variable *variable) {
 }
 
 static void print_classes(struct mof_class *classes, uint32_t count) {
+  char *direction;
   uint32_t i, j, k;
   for (i = 0; i < count; ++i) {
     if (classes[i].namespace && strcmp(classes[i].namespace, "root\\default") != 0) {
@@ -85,7 +93,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       printf("\")\n");
     }
     if (classes[i].qualifiers_count > 0) {
-      print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 0);
+      print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 0, NULL);
       printf("\n");
     }
     printf("class ");
@@ -99,7 +107,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
     printf("{\n");
     for (j = 0; j < classes[i].variables_count; ++j) {
       printf("  ");
-      print_variable(&classes[i].variables[j]);
+      print_variable(&classes[i].variables[j], NULL);
       printf(";\n");
     }
     if (classes[i].variables_count && classes[i].methods_count)
@@ -107,7 +115,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
     for (j = 0; j < classes[i].methods_count; ++j) {
       printf("  ");
       if (classes[i].methods[j].qualifiers_count > 0) {
-        print_qualifiers(classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, 0);
+        print_qualifiers(classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, 0, NULL);
         printf(" ");
       }
       if (classes[i].methods[j].return_value.variable_type)
@@ -118,7 +126,21 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       print_string(classes[i].methods[j].name);
       printf("(");
       for (k = 0; k < classes[i].methods[j].parameters_count; ++k) {
-        print_variable(&classes[i].methods[j].parameters[k]);
+        switch (classes[i].methods[j].parameters_direction[k]) {
+        case MOF_PARAMETER_IN:
+          direction = "in";
+          break;
+        case MOF_PARAMETER_OUT:
+          direction = "out";
+          break;
+        case MOF_PARAMETER_IN_OUT:
+          direction = "in, out";
+          break;
+        default:
+          direction = NULL;
+          break;
+        }
+        print_variable(&classes[i].methods[j].parameters[k], direction);
         if (k != classes[i].methods[j].parameters_count-1)
           printf(", ");
       }

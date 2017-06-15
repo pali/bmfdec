@@ -55,6 +55,13 @@ enum mof_basic_type {
   MOF_BASIC_TYPE_BOOLEAN,
 };
 
+enum mof_parameter_direction {
+  MOF_PARAMETER_UNKNOWN,
+  MOF_PARAMETER_IN,
+  MOF_PARAMETER_OUT,
+  MOF_PARAMETER_IN_OUT,
+};
+
 struct mof_qualifier {
   enum mof_qualifier_type type;
   char *name;
@@ -83,6 +90,7 @@ struct mof_method {
   char *name;
   uint32_t parameters_count;
   struct mof_variable *parameters;
+  enum mof_parameter_direction *parameters_direction;
   struct mof_variable return_value;
 };
 
@@ -461,6 +469,7 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
   }
   out->parameters_count = parameters_count;
   out->parameters = calloc(parameters_count, sizeof(*out->parameters));
+  out->parameters_direction = calloc(parameters_count, sizeof(*out->parameters_direction));
   if (!out->parameters) error("calloc failed");
   int has_return_value = 0;
   for (i=0; i<count; ++i) {
@@ -489,6 +498,21 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
           if (parameters[i].variables[j].qualifiers[k].type == MOF_QUALIFIER_SINT32 &&
               strcmp(parameters[i].variables[j].qualifiers[k].name, "ID") == 0)
             continue;
+          if (parameters[i].variables[j].qualifiers[k].type == MOF_QUALIFIER_BOOLEAN) {
+            if (strcmp(parameters[i].variables[j].qualifiers[k].name, "in") == 0) {
+              if (!out->parameters_direction[id])
+                out->parameters_direction[id] = MOF_PARAMETER_IN;
+              else
+                out->parameters_direction[id] = MOF_PARAMETER_IN_OUT;
+              continue;
+            } else if (strcmp(parameters[i].variables[j].qualifiers[k].name, "out") == 0) {
+              if (!out->parameters_direction[id])
+                out->parameters_direction[id] = MOF_PARAMETER_OUT;
+              else
+                out->parameters_direction[id] = MOF_PARAMETER_IN_OUT;
+              continue;
+            }
+          }
           int skip = 0;
           uint32_t l;
           for (l=0; l<out->parameters[id].qualifiers_count; ++l) {
@@ -511,6 +535,11 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
     }
   }
   free(parameters);
+  for (i=0; i<out->parameters_count; ++i) {
+    if (out->parameters_direction[i] != MOF_PARAMETER_IN &&
+        out->parameters_direction[i] != MOF_PARAMETER_OUT &&
+        out->parameters_direction[i] != MOF_PARAMETER_IN_OUT) error("parameter is not input nor output");
+  }
 }
 
 static struct mof_method parse_class_method(char *buf, uint32_t size) {
@@ -782,15 +811,43 @@ static void print_variable_type(struct mof_variable *variable, int with_info) {
   }
 }
 
-static void print_variables(struct mof_variable *variables, uint32_t count, int indent, char *name) {
+static void print_variable(struct mof_variable *variable, int indent) {
+  printf("%*.s  Name=%s\n", indent, "", variable->name);
+  printf("%*.s  Type=", indent, "");
+  print_variable_type(variable, 1);
+  printf("\n");
+  print_qualifiers(variable->qualifiers, variable->qualifiers_count, indent+2);
+}
+
+static void print_variables(struct mof_variable *variables, uint32_t count) {
   uint32_t i;
   for (i = 0; i < count; ++i) {
-    printf("%*.s%s %u:\n", indent, "", name, i);
-    printf("%*.s  Name=%s\n", indent, "", variables[i].name);
-    printf("%*.s  Type=", indent, "");
-    print_variable_type(&variables[i], 1);
+    printf("  Variable %u:\n", i);
+    print_variable(&variables[i], 2);
+  }
+}
+
+static void print_parameters(struct mof_method *method) {
+  uint32_t i;
+  for (i = 0; i < method->parameters_count; ++i) {
+    printf("    Parameter %u:\n", i);
+    printf("      Direction=");
+    switch (method->parameters_direction[i]) {
+    case MOF_PARAMETER_IN:
+      printf("in");
+      break;
+    case MOF_PARAMETER_OUT:
+      printf("out");
+      break;
+    case MOF_PARAMETER_IN_OUT:
+      printf("in+out");
+      break;
+    default:
+      printf("unknown");
+      break;
+    }
     printf("\n");
-    print_qualifiers(variables[i].qualifiers, variables[i].qualifiers_count, indent+2);
+    print_variable(&method->parameters[i], 4);
   }
 }
 
@@ -802,7 +859,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
     printf("  Superclassname=%s\n", classes[i].superclassname);
     printf("  Namespace=%s\n", classes[i].namespace);
     print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 2);
-    print_variables(classes[i].variables, classes[i].variables_count, 2, "Variable");
+    print_variables(classes[i].variables, classes[i].variables_count);
     for (j = 0; j < classes[i].methods_count; ++j) {
       printf("  Method %u:\n", j);
       printf("    Name=%s\n", classes[i].methods[j].name);
@@ -814,7 +871,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       else
          printf("Void");
       printf("\n");
-      print_variables(classes[i].methods[j].parameters, classes[i].methods[j].parameters_count, 4, "Parameter");
+      print_parameters(&classes[i].methods[j]);
     }
   }
 }
