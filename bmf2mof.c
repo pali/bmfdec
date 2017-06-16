@@ -34,7 +34,7 @@ static void print_string(char *str) {
   }
 }
 
-static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, int indent, char *prefix) {
+static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, char *prefix) {
   uint32_t i;
   if (count > 0 || prefix) {
     printf("[");
@@ -73,7 +73,7 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
 
 static void print_variable(struct mof_variable *variable, char *prefix) {
   if (variable->qualifiers_count > 0 || prefix) {
-    print_qualifiers(variable->qualifiers, variable->qualifiers_count, 0, prefix);
+    print_qualifiers(variable->qualifiers, variable->qualifiers_count, prefix);
     printf(" ");
   }
   print_variable_type(variable, 0);
@@ -93,7 +93,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       printf("\")\n");
     }
     if (classes[i].qualifiers_count > 0) {
-      print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 0, NULL);
+      print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, NULL);
       printf("\n");
     }
     printf("class ");
@@ -115,7 +115,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
     for (j = 0; j < classes[i].methods_count; ++j) {
       printf("  ");
       if (classes[i].methods[j].qualifiers_count > 0) {
-        print_qualifiers(classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, 0, NULL);
+        print_qualifiers(classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, NULL);
         printf(" ");
       }
       if (classes[i].methods[j].return_value.variable_type)
