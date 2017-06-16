@@ -194,7 +194,7 @@ static struct mof_qualifier parse_qualifier_string(char *buf, uint32_t size, cha
   return out;
 }
 
-static struct mof_qualifier parse_qualifier(char *buf, uint32_t size) {
+static struct mof_qualifier parse_qualifier(char *buf, uint32_t size, uint32_t offset) {
   struct mof_qualifier out;
   memset(&out, 0, sizeof(out));
   uint32_t *buf2 = (uint32_t *)buf;
@@ -224,10 +224,38 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size) {
     }
     break;
   }
+  if (offset) {
+    uint32_t i;
+    uint32_t olen = ((uint32_t *)(buf-offset))[1];
+    uint32_t count = ((uint32_t *)(buf-offset+olen+16))[0];
+    for (i=0; i<count; ++i) {
+      uint32_t *offset_addr = (uint32_t *)(buf-offset+olen+16+4) + 2*i;
+      if (*offset_addr != offset)
+        continue;
+      *offset_addr = 0;
+      uint32_t type2 = ((uint32_t *)(buf-offset+olen+16+4))[2*i+1];
+      switch (type2) {
+      case 0x01:
+        if (out.type != MOF_QUALIFIER_BOOLEAN || strcmp(out.name, "Dynamic") != 0) error("qualifier type in second part does not match");
+        break;
+      case 0x03:
+        if (out.type != MOF_QUALIFIER_STRING || strcmp(out.name, "CIMTYPE") != 0) error("qualifier type in second part does not match");
+        break;
+      case 0x11:
+        if (out.type != MOF_QUALIFIER_SINT32 || strcmp(out.name, "ID") != 0) error("qualifier type in second part does not match");
+        break;
+      default:
+        fprintf(stderr, "Warning: Unknown qualifier type in second part 0x%x\n", type2);
+        fprintf(stderr, "Hexdump:\n");
+        dump_bytes(buf, size);
+        break;
+      }
+    }
+  }
   return out;
 }
 
-static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
+static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32_t offset) {
   struct mof_variable out;
   memset(&out, 0, sizeof(out));
   uint32_t *buf2 = (uint32_t *)buf;
@@ -318,7 +346,7 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
     if (tmp+4 > buf+20+len+8+len1) error("Invalid size");
     uint32_t len2 = ((uint32_t *)tmp)[0];
     if (len2 == 0 || tmp+len2 > buf+20+len+8+len1) error("Invalid size");
-    out.qualifiers[out.qualifiers_count] = parse_qualifier(tmp, len2);
+    out.qualifiers[out.qualifiers_count] = parse_qualifier(tmp, len2, offset ? offset+tmp-buf : 0);
     if (out.qualifiers[out.qualifiers_count].name) {
       if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_STRING && strcmp(out.qualifiers[out.qualifiers_count].name, "CIMTYPE") == 0) {
         if (out.variable_type == MOF_VARIABLE_OBJECT || out.variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
@@ -373,7 +401,7 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size) {
   return out;
 }
 
-static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size1, int with_qualifiers);
+static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size1, int with_qualifiers, uint32_t offset);
 
 static int cmp_qualifiers(struct mof_qualifier *a, struct mof_qualifier *b) {
   if (strcmp(a->name, b->name) != 0 || a->type != b->type)
@@ -407,7 +435,7 @@ static int cmp_variables(struct mof_variable *a, struct mof_variable *b) {
   }
 }
 
-static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_method *out) {
+static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_method *out, uint32_t offset) {
   struct mof_class *parameters;
   uint32_t *buf2 = (uint32_t *)buf;
   if (size < 16) error("Invalid size");
@@ -431,7 +459,7 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
     uint32_t len2 = buf2[3];
     if (tmp+len2+20 > buf+16+len) error("Invalid size");
     if (buf2[4] != 0x1) error("Invalid unknown");
-    parameters[i] = parse_class_data(tmp+20, len2, len2, 0);
+    parameters[i] = parse_class_data(tmp+20, len2, len2, 0, offset ? offset+tmp+20-buf : 0);
     if (strcmp(parameters[i].name, "__PARAMETERS") != 0) error("Invalid parameters class name");
     tmp += len1;
   }
@@ -542,7 +570,7 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
   }
 }
 
-static struct mof_method parse_class_method(char *buf, uint32_t size) {
+static struct mof_method parse_class_method(char *buf, uint32_t size, uint32_t offset) {
   struct mof_method out;
   memset(&out, 0, sizeof(out));
   uint32_t *buf2 = (uint32_t *)buf;
@@ -559,7 +587,7 @@ static struct mof_method parse_class_method(char *buf, uint32_t size) {
     len = buf2[4];
   else {
     if (20+buf2[4] > size || buf2[4] < len) error("Invalid size");
-    parse_class_method_parameters(buf+20+len, buf2[4]-len, &out);
+    parse_class_method_parameters(buf+20+len, buf2[4]-len, &out, offset ? offset+20+len : 0);
   }
   if (20+len > size) error("Invalid size");
   out.name = parse_string(buf+20, len);
@@ -577,7 +605,7 @@ static struct mof_method parse_class_method(char *buf, uint32_t size) {
     if (tmp+4 > buf+20+len+8+len1) error("Invalid size");
     uint32_t len2 = ((uint32_t *)tmp)[0];
     if (len2 == 0 || tmp+len2 > buf+20+len+8+len1) error("Invalid size");
-    out.qualifiers[i] = parse_qualifier(tmp, len2);
+    out.qualifiers[i] = parse_qualifier(tmp, len2, offset ? offset+tmp-buf : 0);
     tmp += len2;
   }
   if (tmp != buf+size) error("Buffer not processed");
@@ -611,7 +639,7 @@ static void parse_class_property(char *buf, uint32_t size, struct mof_class *out
   }
 }
 
-static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size1, int with_qualifiers) {
+static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size1, int with_qualifiers, uint32_t offset) {
   struct mof_class out;
   memset(&out, 0, sizeof(out));
   uint32_t *buf2 = (uint32_t *)buf;
@@ -630,7 +658,7 @@ static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size
       if (tmp+4 > buf+len1) error("Invalid size");
       uint32_t len = ((uint32_t *)tmp)[0];
       if (len == 0 || tmp+len > buf+len1) error("Invalid size");
-      out.qualifiers[i] = parse_qualifier(tmp, len);
+      out.qualifiers[i] = parse_qualifier(tmp, len, offset ? offset+tmp-buf : 0);
       tmp += len;
     }
   } else {
@@ -652,7 +680,7 @@ static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size
     if (tmp+16 <= buf+len1+len2 && ((uint32_t *)tmp)[4] == 0xFFFFFFFF) {
       parse_class_property(tmp, len, &out);
     } else {
-      out.variables[i] = parse_class_variable(tmp, len);
+      out.variables[i] = parse_class_variable(tmp, len, offset ? offset+tmp-buf : 0);
       out.variables_count++;
     }
     tmp += len;
@@ -667,7 +695,7 @@ static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size
   return out;
 }
 
-static struct mof_class parse_class(char *buf, uint32_t size) {
+static struct mof_class parse_class(char *buf, uint32_t size, uint32_t offset) {
   struct mof_class out;
   memset(&out, 0, sizeof(out));
   uint32_t *buf2 = (uint32_t *)buf;
@@ -682,9 +710,11 @@ static struct mof_class parse_class(char *buf, uint32_t size) {
   if (buf2[4] != 0x0) error("Invalid unknown");
   if (len + 20 > size) error("Invalid size");
   if (len1 > len) error("Invalid size");
-  out = parse_class_data(buf+20, len, len1, 1);
+  out = parse_class_data(buf+20, len, len1, 1, offset ? offset+20 : 0);
   buf += 20 + len;
   size -= 20 + len;
+  if (offset)
+    offset += 20 + len;
   if (size < 4) error("Invalid size");
   buf2 = (uint32_t *)buf;
   len = buf2[0];
@@ -693,6 +723,8 @@ static struct mof_class parse_class(char *buf, uint32_t size) {
   uint32_t i;
   buf += 8;
   size -= 8;
+  if (offset)
+    offset += 8;
   out.methods_count = count;
   out.methods = calloc(count, sizeof(*out.methods));
   if (!out.methods) error("calloc failed");
@@ -700,14 +732,16 @@ static struct mof_class parse_class(char *buf, uint32_t size) {
     if (size < 4) error("Invalid size");
     uint32_t len1 = ((uint32_t *)buf)[0];
     if (len1 == 0 || len1 > size) error("Invalid size");
-    out.methods[i] = parse_class_method(buf, len1);
+    out.methods[i] = parse_class_method(buf, len1, offset);
     buf += len1;
     size -= len1;
+    if (offset)
+      offset += len1;
   }
   return out;
 }
 
-static struct mof_classes parse_root(char *buf, uint32_t size) {
+static struct mof_classes parse_root(char *buf, uint32_t size, uint32_t offset) {
   struct mof_classes out;
   memset(&out, 0, sizeof(out));
   if (size < 12) error("Invalid size");
@@ -723,7 +757,7 @@ static struct mof_classes parse_root(char *buf, uint32_t size) {
     if (tmp+4 > buf+size) error("Invalid size");
     uint32_t len = ((uint32_t *)tmp)[0];
     if (len == 0 || tmp+len > buf+size) error("Invalid size");
-    out.classes[i] = parse_class(tmp, len);
+    out.classes[i] = parse_class(tmp, len, offset ? offset+tmp-buf : 0);
     tmp += len;
   }
   if (tmp != buf+size) error("Buffer not processed");
@@ -731,18 +765,27 @@ static struct mof_classes parse_root(char *buf, uint32_t size) {
 }
 
 static struct mof_classes parse_bmf(char *buf, uint32_t size) {
+  struct mof_classes out;
   if (size < 8) error("Invalid file size");
   if (((uint32_t *)buf)[0] != 0x424D4F46) error("Invalid magic header");
   uint32_t len = ((uint32_t *)buf)[1];
   if (len > size) error("Invalid size");
+  uint32_t i;
+  uint32_t count = 0;
   if (len < size) {
     if (size-len < 20) error("Invalid size");
     if (memcmp(buf+len, "BMOFQUALFLAVOR11", 16) != 0) error("Invalid second magic header");
-    uint32_t count = ((uint32_t *)(buf+len+16))[0];
+    count = ((uint32_t *)(buf+len+16))[0];
     if (8*count != size-len-16-4) error("Invalid size");
-    // TODO: parse BMOFQUALFLAVOR11 at buf+len+16+4 with size 8*count
+    for (i=0; i<count; ++i) {
+      if (((uint32_t *)(buf+len+16+4))[2*i] == 0) error("Invalid offset in second part");
+    }
   }
-  return parse_root(buf+8, len-8);
+  out = parse_root(buf+8, len-8, (len < size) ? 8 : 0);
+  for (i=0; i<count; ++i) {
+    if (((uint32_t *)(buf+len+16+4))[2*i] != 0) error("Qualifier from second part was not parsed");
+  }
+  return out;
 }
 
 static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, int indent) {
