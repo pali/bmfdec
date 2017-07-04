@@ -16,9 +16,9 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#define main bmfdec_main
+#define process_data bmfdec_process_data
 #include "bmfdec.c"
-#undef main
+#undef process_data
 
 #include <stdlib.h>
 #include <string.h>
@@ -919,25 +919,12 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
   }
 }
 
-#undef print_classes
-static void print_classes(struct mof_class *classes, uint32_t count);
-
-int main() {
-  char pin[0x10000];
-  char pout[0x10000];
-  int lin, lout;
+static int process_data(char *data, uint32_t size) {
   struct mof_classes classes;
-  lin = read(0, pin, sizeof(pin));
-  if (lin <= 16 || lin == sizeof(pin) || ((uint32_t *)pin)[0] != 0x424D4F46 || ((uint32_t *)pin)[1] != 0x01 || ((uint32_t *)pin)[2] != (uint32_t)lin-16 || ((uint32_t *)pin)[3] > sizeof(pout)) {
-    fprintf(stderr, "Invalid input\n");
-    return 1;
-  }
-  lout = ((uint32_t *)pin)[3];
-  if (ds_dec(pin+16, lin-16, pout, lout, 0) != lout) {
-    fprintf(stderr, "Decompress failed\n");
-    return 1;
-  }
-  classes = parse_bmf(pout, lout);
+  classes = parse_bmf(data, size);
   print_classes(classes.classes, classes.count);
   return 0;
 }
+
+#undef print_classes
+static void print_classes(struct mof_class *classes, uint32_t count);

@@ -252,6 +252,14 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
  * M*8 bytes: second part data
  */
 
+static int process_data(char *data, uint32_t size) {
+  ssize_t ret = write(1, data, size);
+  return (ret > 0 && ret == size) ? 0 : 1;
+}
+
+#undef process_data
+static int process_data(char *data, uint32_t size);
+
 int main() {
   char pin[0x10000];
   char pout[0x10000];
@@ -266,6 +274,5 @@ int main() {
     fprintf(stderr, "Decompress failed\n");
     return 1;
   }
-  if (write(1, pout, lout) != lout) return 1;
-  return 0;
+  return process_data(pout, lout);
 }
