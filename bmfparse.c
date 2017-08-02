@@ -919,12 +919,12 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
   }
 }
 
+#undef print_classes
+static void print_classes(struct mof_class *classes, uint32_t count);
+
 static int process_data(char *data, uint32_t size) {
   struct mof_classes classes;
   classes = parse_bmf(data, size);
   print_classes(classes.classes, classes.count);
   return 0;
 }
-
-#undef print_classes
-static void print_classes(struct mof_class *classes, uint32_t count);
