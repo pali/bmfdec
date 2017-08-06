@@ -736,9 +736,15 @@ static struct mof_class parse_class(char *buf, uint32_t size, uint32_t offset) {
   }
   uint32_t len1 = buf2[2];
   uint32_t len = buf2[3];
-  if (buf2[4] != 0x0) error("Invalid unknown");
   if (len + 20 > size) error("Invalid size");
   if (len1 > len) error("Invalid size");
+  if (buf2[4] == 0x1) {
+    fprintf(stderr, "Warning: Instance of class is not supported yet\n");
+    return out;
+  } else if (buf2[4] != 0x0) {
+    fprintf(stderr, "Warning: Class has unknown value 0x%x\n", buf2[4]);
+    return out;
+  }
   out = parse_class_data(buf+20, len, len1, 1, offset ? offset+20 : 0);
   buf += 20 + len;
   size -= 20 + len;
