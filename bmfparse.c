@@ -216,6 +216,9 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size, uint32_t o
   case 0x08:
     out = parse_qualifier_string(buf+16, len, buf+16+len, size-len-16);
     break;
+  case 0x2008:
+    fprintf(stderr, "Warning: ValueMap and Values qualifiers are not supported yet\n");
+    break;
   default:
     fprintf(stderr, "Warning: Unknown qualifier type 0x%x\n", type);
     fprintf(stderr, "Hexdump:\n");
@@ -250,9 +253,7 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size, uint32_t o
         if (out.type != MOF_QUALIFIER_SINT32 || strcmp(out.name, "ID") != 0) error("qualifier type in second part does not match");
         break;
       default:
-        fprintf(stderr, "Warning: Unknown qualifier type in second part 0x%x\n", type2);
-        fprintf(stderr, "Hexdump:\n");
-        dump_bytes(buf, size);
+        fprintf(stderr, "Warning: Unknown qualifier type in second part 0x%x for %s\n", type2, out.name);
         break;
       }
     }
