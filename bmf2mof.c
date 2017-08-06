@@ -64,6 +64,8 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, c
         printf("unknown");
         break;
       }
+      if (qualifiers[i].tosubclass)
+        printf(" : ToSubclass");
       if (i != count-1)
         printf(", ");
     }

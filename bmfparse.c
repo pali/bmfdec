@@ -65,6 +65,7 @@ enum mof_parameter_direction {
 struct mof_qualifier {
   enum mof_qualifier_type type;
   char *name;
+  uint8_t tosubclass;
   union {
     uint8_t boolean;
     int32_t sint32;
@@ -237,6 +238,9 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size, uint32_t o
       switch (type2) {
       case 0x01:
         if (out.type != MOF_QUALIFIER_BOOLEAN || strcmp(out.name, "Dynamic") != 0) error("qualifier type in second part does not match");
+        break;
+      case 0x02:
+        out.tosubclass = 1;
         break;
       case 0x03:
         if (out.type != MOF_QUALIFIER_STRING || strcmp(out.name, "CIMTYPE") != 0) error("qualifier type in second part does not match");
@@ -867,6 +871,7 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
   for (i = 0; i < count; ++i) {
     printf("%*.sQualifier %u:\n", indent, "", i);
     printf("%*.s  Name=%s\n", indent, "", qualifiers[i].name);
+    printf("%*.s  Tosubclass=%s\n", indent, "", qualifiers[i].tosubclass ? "TRUE" : "FALSE");
     switch (qualifiers[i].type) {
     case MOF_QUALIFIER_BOOLEAN:
       printf("%*.s  Type=Boolean\n", indent, "");
