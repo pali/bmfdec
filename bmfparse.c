@@ -119,7 +119,6 @@ static char *parse_string(char *buf, uint32_t size) {
   uint32_t i, j;
   for (i=0, j=0; i<size/2; ++i) {
     if (buf2[i] == 0) {
-      out[j++] = 0;
       break;
     } else if (buf2[i] < 0x80) {
       out[j++] = buf2[i];
@@ -132,6 +131,7 @@ static char *parse_string(char *buf, uint32_t size) {
       out[j++] = 0x80 | (buf2[i] & 0x3F);
     }
   }
+  out[j] = 0;
   return out;
 }
 
