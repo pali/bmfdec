@@ -26,7 +26,11 @@ typedef uint8_t __u8;
 typedef uint32_t __u32;
 typedef uint16_t __u16;
 
+#ifdef DEBUG
 #define LOG_DECOMP(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOG_DECOMP(...)
+#endif
 
 /*
 dblspace_dec.c
