@@ -86,11 +86,13 @@ static void print_variable(struct mof_variable *variable, char *prefix) {
 static void print_classes(struct mof_class *classes, uint32_t count) {
   char *direction;
   uint32_t i, j, k;
+  int print_namespace = 0;
   for (i = 0; i < count; ++i) {
-    if (classes[i].namespace && strcmp(classes[i].namespace, "root\\default") != 0) {
+    if (classes[i].namespace && (print_namespace || strcmp(classes[i].namespace, "root\\default") != 0)) {
       printf("#pragma namespace(\"");
       print_string(classes[i].namespace);
       printf("\")\n");
+      print_namespace = 1;
     }
     if (classes[i].qualifiers_count > 0) {
       print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, NULL);
