@@ -98,6 +98,8 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       printf("\")\n");
       print_namespace = 1;
     }
+    if (classes[i].classflags)
+      printf("#pragma classflags(%d)\n", (int)classes[i].classflags);
     if (classes[i].qualifiers_count > 0) {
       print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, NULL);
       printf("\n");

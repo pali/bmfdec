@@ -99,6 +99,7 @@ struct mof_class {
   char *name;
   char *namespace;
   char *superclassname;
+  int32_t classflags;
   uint32_t qualifiers_count;
   struct mof_qualifier *qualifiers;
   uint32_t variables_count;
@@ -627,26 +628,33 @@ static void parse_class_property(char *buf, uint32_t size, struct mof_class *out
   if (size < 20) error("Invalid size");
   uint32_t len = buf2[0];
   if (len == 0 || size < len) error("Invalid size");
-  if (buf2[1] != 0x08 || buf2[2] != 0x0) error("Invalid unknown");
-  if (buf2[4] != 0xFFFFFFFF) {
-    fprintf(stderr, "Warning: cannot parse unknown 0x%x in class property\n", buf2[4]);
-    fprintf(stderr, "Hexdump:\n");
-    dump_bytes(buf, size);
-    return;
-  }
+  if (buf2[2] != 0x0 || buf2[4] != 0xFFFFFFFF) error("Invalid unknown");
+  uint32_t type = buf2[1];
   uint32_t slen = buf2[3];
   if (size < slen+20) error("Invalid size");
   char *name = parse_string(buf+20, slen);
-  char *value = parse_string(buf+20+slen, size-slen-20);
-  if (strcmp(name, "__CLASS") == 0) {
-    out->name = value;
-  } else if (strcmp(name, "__NAMESPACE") == 0) {
-    out->namespace = value;
-  } else if (strcmp(name, "__SUPERCLASS") == 0) {
-    out->superclassname = value;
+  if (type == 0x08) {
+    char *value = parse_string(buf+20+slen, size-slen-20);
+    if (strcmp(name, "__CLASS") == 0) {
+      out->name = value;
+    } else if (strcmp(name, "__NAMESPACE") == 0) {
+      out->namespace = value;
+    } else if (strcmp(name, "__SUPERCLASS") == 0) {
+      out->superclassname = value;
+    } else {
+      fprintf(stderr, "Warning: Unknown class property name %s\n", name);
+      free(value);
+    }
+  } else if (type == 0x03) {
+    if (size-slen-20 != 4) error("Invalid size");
+    int32_t value = *((int32_t *)(buf+20+slen));
+    if (strcmp(name, "__CLASSFLAGS") == 0) {
+      out->classflags = value;
+    } else {
+      fprintf(stderr, "Warning: Unknown class property name %s\n", name);
+    }
   } else {
-    fprintf(stderr, "Warning: Unknown class property name %s\n", name);
-    free(value);
+    fprintf(stderr, "Warning: Unknown class property type 0x%x for name %s\n", type, name);
   }
   free(name);
 }
@@ -979,6 +987,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
     printf("Class %u:\n", i);
     printf("  Name=%s\n", classes[i].name);
     printf("  Superclassname=%s\n", classes[i].superclassname);
+    printf("  Classflags=%d\n", (int)classes[i].classflags);
     printf("  Namespace=%s\n", classes[i].namespace);
     print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 2);
     print_variables(classes[i].variables, classes[i].variables_count);
