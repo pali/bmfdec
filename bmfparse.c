@@ -338,7 +338,15 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
   if (buf2[2] != 0x0 || buf2[3] != 0xFFFFFFFF) error("Invalid unknown");
   uint32_t len = buf2[4];
   if (20+len > size) error("Invalid size");
-  out.name = parse_string(buf+20, len);
+  uint32_t slen = buf2[3];
+  if (slen != 0xFFFFFFFF) {
+    if (20+slen > size || slen > len) error("Invalid size");
+    out.name = parse_string(buf+20, slen);
+    fprintf(stderr, "Warning: Variable value is not supported yet\n");
+    dump_bytes(buf+20+slen, len-slen);
+  } else {
+    out.name = parse_string(buf+20, len);
+  }
   if (20+len+8 > size) error("Invalid size");
   buf2 = (uint32_t *)(buf+20+len);
   uint32_t len1 = buf2[0];
