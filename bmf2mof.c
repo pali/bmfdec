@@ -88,6 +88,8 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
   uint32_t i, j, k;
   int print_namespace = 0;
   for (i = 0; i < count; ++i) {
+    if (!classes[i].name)
+      continue;
     if (classes[i].namespace && (print_namespace || strcmp(classes[i].namespace, "root\\default") != 0)) {
       printf("#pragma namespace(\"");
       print_string(classes[i].namespace);
