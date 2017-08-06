@@ -350,13 +350,11 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
     if (out.qualifiers[out.qualifiers_count].name) {
       if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_STRING && strcmp(out.qualifiers[out.qualifiers_count].name, "CIMTYPE") == 0) {
         if (out.variable_type == MOF_VARIABLE_OBJECT || out.variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
-          if (strncmp(out.qualifiers[out.qualifiers_count].value.string, "object:", strlen("object:")) == 0) {
-            out.type.object = out.qualifiers[out.qualifiers_count].value.string + strlen("object:");
-            free(out.qualifiers[out.qualifiers_count].name);
-          } else {
-            out.qualifiers_count++;
+          if (strncmp(out.qualifiers[out.qualifiers_count].value.string, "object:", strlen("object:")) != 0)
             error("object without 'object:' in CIMTYPE");
-          }
+          out.type.object = strdup(out.qualifiers[out.qualifiers_count].value.string + strlen("object:"));
+          free(out.qualifiers[out.qualifiers_count].name);
+          free(out.qualifiers[out.qualifiers_count].value.string);
         } else {
           char *strtype = out.qualifiers[out.qualifiers_count].value.string;
           enum mof_basic_type basic_type;
@@ -402,6 +400,7 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
 }
 
 static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size1, int with_qualifiers, uint32_t offset);
+static void free_classes(struct mof_class *classes, uint32_t count);
 
 static int cmp_qualifiers(struct mof_qualifier *a, struct mof_qualifier *b) {
   if (strcmp(a->name, b->name) != 0 || a->type != b->type)
@@ -503,37 +502,41 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
   for (i=0; i<count; ++i) {
     for (j=0; j<parameters[i].variables_count; ++j) {
       int32_t id = -1;
-      for (k=0; k<parameters[i].variables[j].qualifiers_count; ++k) {
-        if (parameters[i].variables[j].qualifiers[k].type != MOF_QUALIFIER_SINT32)
+      struct mof_variable variable = parameters[i].variables[j];
+      for (k=0; k<variable.qualifiers_count; ++k) {
+        if (variable.qualifiers[k].type != MOF_QUALIFIER_SINT32)
           continue;
-        if (strcmp(parameters[i].variables[j].qualifiers[k].name, "ID") != 0)
+        if (strcmp(variable.qualifiers[k].name, "ID") != 0)
           continue;
-        id = parameters[i].variables[j].qualifiers[k].value.sint32;
+        id = variable.qualifiers[k].value.sint32;
         break;
       }
       if (id != -1) {
         if (parameters_map[id] == 2) {
-        if (cmp_variables(&out->parameters[id], &parameters[i].variables[j]) != 0) error("two variables at same position");
-          out->parameters[id].qualifiers = realloc(out->parameters[id].qualifiers, (out->parameters[id].qualifiers_count+parameters[i].variables[j].qualifiers_count-1)*sizeof(*out->parameters[id].qualifiers));
+          if (cmp_variables(&out->parameters[id], &variable) != 0) error("two variables at same position");
+          out->parameters[id].qualifiers = realloc(out->parameters[id].qualifiers, (out->parameters[id].qualifiers_count+variable.qualifiers_count-1)*sizeof(*out->parameters[id].qualifiers));
           if (!out->parameters[id].qualifiers) error("realloc failed");
         } else {
-          out->parameters[id] = parameters[i].variables[j];
+          out->parameters[id] = variable;
           out->parameters[id].qualifiers_count = 0;
-          out->parameters[id].qualifiers = calloc(parameters[i].variables[j].qualifiers_count-1, sizeof(*out->parameters[id].qualifiers));
+          out->parameters[id].qualifiers = calloc(variable.qualifiers_count-1, sizeof(*out->parameters[id].qualifiers));
           parameters_map[id] = 2;
+          memset(&parameters[i].variables[j], 0, sizeof(parameters[i].variables[j]));
+          parameters[i].variables[j].qualifiers_count = variable.qualifiers_count;
+          parameters[i].variables[j].qualifiers = variable.qualifiers;
         }
-        for (k=0; k<parameters[i].variables[j].qualifiers_count; ++k) {
-          if (parameters[i].variables[j].qualifiers[k].type == MOF_QUALIFIER_SINT32 &&
-              strcmp(parameters[i].variables[j].qualifiers[k].name, "ID") == 0)
+        for (k=0; k<variable.qualifiers_count; ++k) {
+          if (variable.qualifiers[k].type == MOF_QUALIFIER_SINT32 &&
+              strcmp(variable.qualifiers[k].name, "ID") == 0)
             continue;
-          if (parameters[i].variables[j].qualifiers[k].type == MOF_QUALIFIER_BOOLEAN) {
-            if (strcmp(parameters[i].variables[j].qualifiers[k].name, "in") == 0) {
+          if (variable.qualifiers[k].type == MOF_QUALIFIER_BOOLEAN) {
+            if (strcmp(variable.qualifiers[k].name, "in") == 0) {
               if (!out->parameters_direction[id])
                 out->parameters_direction[id] = MOF_PARAMETER_IN;
               else
                 out->parameters_direction[id] = MOF_PARAMETER_IN_OUT;
               continue;
-            } else if (strcmp(parameters[i].variables[j].qualifiers[k].name, "out") == 0) {
+            } else if (strcmp(variable.qualifiers[k].name, "out") == 0) {
               if (!out->parameters_direction[id])
                 out->parameters_direction[id] = MOF_PARAMETER_OUT;
               else
@@ -544,25 +547,28 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
           int skip = 0;
           uint32_t l;
           for (l=0; l<out->parameters[id].qualifiers_count; ++l) {
-            if (cmp_qualifiers(&out->parameters[id].qualifiers[l], &parameters[i].variables[j].qualifiers[k]) == 0) {
+            if (cmp_qualifiers(&out->parameters[id].qualifiers[l], &variable.qualifiers[k]) == 0) {
               skip = 1;
               break;
             }
           }
           if (skip)
             continue;
-          out->parameters[id].qualifiers[out->parameters[id].qualifiers_count++] = parameters[i].variables[j].qualifiers[k];
+          out->parameters[id].qualifiers[out->parameters[id].qualifiers_count++] = variable.qualifiers[k];
+          memset(&parameters[i].variables[j].qualifiers[k], 0, sizeof(parameters[i].variables[j].qualifiers[k]));
         }
-      } else if (strcmp(parameters[i].variables[j].name, "ReturnValue") == 0) {
+      } else if (strcmp(variable.name, "ReturnValue") == 0) {
         if (has_return_value) error("multiple return values");
-        out->return_value = parameters[i].variables[j];
+        out->return_value = variable;
         has_return_value = 1;
+        memset(&parameters[i].variables[j], 0, sizeof(parameters[i].variables[j]));
       } else {
         error("variable is not parameter nor return value");
       }
     }
   }
-  free(parameters);
+  free(parameters_map);
+  free_classes(parameters, count);
   for (i=0; i<out->parameters_count; ++i) {
     if (out->parameters_direction[i] != MOF_PARAMETER_IN &&
         out->parameters_direction[i] != MOF_PARAMETER_OUT &&
@@ -636,7 +642,9 @@ static void parse_class_property(char *buf, uint32_t size, struct mof_class *out
     out->superclassname = value;
   } else {
     fprintf(stderr, "Warning: Unknown class property name %s\n", name);
+    free(value);
   }
+  free(name);
 }
 
 static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size1, int with_qualifiers, uint32_t offset) {
@@ -739,6 +747,72 @@ static struct mof_class parse_class(char *buf, uint32_t size, uint32_t offset) {
       offset += len1;
   }
   return out;
+}
+
+static void free_qualifier(struct mof_qualifier *qualifier) {
+  if (!qualifier)
+    return;
+  free(qualifier->name);
+  if (qualifier->type == MOF_QUALIFIER_STRING)
+    free(qualifier->value.string);
+}
+
+static void free_qualifiers(struct mof_qualifier *qualifiers, uint32_t count) {
+  uint32_t i;
+  for (i=0; i<count; ++i)
+    free_qualifier(&qualifiers[i]);
+  free(qualifiers);
+}
+
+static void free_variable(struct mof_variable *variable) {
+  if (!variable)
+    return;
+  free(variable->name);
+  free_qualifiers(variable->qualifiers, variable->qualifiers_count);
+  if (variable->variable_type == MOF_VARIABLE_OBJECT || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY)
+    free(variable->type.object);
+}
+
+static void free_variables(struct mof_variable *variables, uint32_t count) {
+  uint32_t i;
+  for (i=0; i<count; ++i)
+    free_variable(&variables[i]);
+  free(variables);
+}
+
+static void free_method(struct mof_method *method) {
+  if (!method)
+    return;
+  free_qualifiers(method->qualifiers, method->qualifiers_count);
+  free(method->name);
+  free_variables(method->parameters, method->parameters_count);
+  free_variable(&method->return_value);
+  free(method->parameters_direction);
+}
+
+static void free_methods(struct mof_method *methods, uint32_t count) {
+  uint32_t i;
+  for (i=0; i<count; ++i)
+    free_method(&methods[i]);
+  free(methods);
+}
+
+static void free_class(struct mof_class *class) {
+  if (!class)
+    return;
+  free(class->name);
+  free(class->namespace);
+  free(class->superclassname);
+  free_qualifiers(class->qualifiers, class->qualifiers_count);
+  free_variables(class->variables, class->variables_count);
+  free_methods(class->methods, class->methods_count);
+}
+
+static void free_classes(struct mof_class *classes, uint32_t count) {
+  uint32_t i;
+  for (i=0; i<count; ++i)
+    free_class(&classes[i]);
+  free(classes);
 }
 
 static struct mof_classes parse_root(char *buf, uint32_t size, uint32_t offset) {
@@ -926,5 +1000,6 @@ static int process_data(char *data, uint32_t size) {
   struct mof_classes classes;
   classes = parse_bmf(data, size);
   print_classes(classes.classes, classes.count);
+  free_classes(classes.classes, classes.count);
   return 0;
 }
