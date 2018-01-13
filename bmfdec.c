@@ -18,6 +18,8 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
 #include <unistd.h>
 
 #define INLINE static inline
@@ -265,16 +267,24 @@ static int process_data(char *data, uint32_t size) {
 static int process_data(char *data, uint32_t size);
 
 int main() {
-  char pin[0x10000];
+  uint32_t pin[0x10000/4];
   char pout[0x10000];
-  int lin, lout;
+  ssize_t lin;
+  int lout;
   lin = read(0, pin, sizeof(pin));
-  if (lin <= 16 || lin == sizeof(pin) || ((uint32_t *)pin)[0] != 0x424D4F46 || ((uint32_t *)pin)[1] != 0x01 || ((uint32_t *)pin)[2] != (uint32_t)lin-16 || ((uint32_t *)pin)[3] > sizeof(pout)) {
+  if (lin < 0) {
+    fprintf(stderr, "Failed to read data: %s\n", strerror(errno));
+    return 1;
+  } else if (lin == sizeof(pin)) {
+    fprintf(stderr, "Failed to read data: %s\n", strerror(EFBIG));
+    return 1;
+  }
+  if (lin <= 16 || pin[0] != 0x424D4F46 || pin[1] != 0x01 || pin[2] != (uint32_t)lin-16 || pin[3] > sizeof(pout)) {
     fprintf(stderr, "Invalid input\n");
     return 1;
   }
-  lout = ((uint32_t *)pin)[3];
-  if (ds_dec(pin+16, lin-16, pout, lout, 0) != lout) {
+  lout = pin[3];
+  if (ds_dec((char *)pin+16, lin-16, pout, lout, 0) != lout) {
     fprintf(stderr, "Decompress failed\n");
     return 1;
   }
