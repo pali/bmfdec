@@ -25,6 +25,8 @@
 
 #define error(str) do { fprintf(stderr, "error %s at %s:%d\n", str, __func__, __LINE__); exit(1); } while (0)
 
+#define check_sum(a, b, sum) (UINT32_MAX - (uint32_t)(a) >= (uint32_t)(b) && (uint32_t)(a)+(uint32_t)(b) <= (uint32_t)(sum))
+
 enum mof_qualifier_type {
   MOF_QUALIFIER_UNKNOWN,
   MOF_QUALIFIER_BOOLEAN,
@@ -203,14 +205,14 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size, uint32_t o
   if (size < 16) error("Invalid size");
   uint32_t type = buf2[1];
   uint32_t len = buf2[3];
-  if (len+16 > size) error("Invalid size");
+  if (!check_sum(16, len, size)) error("Invalid size");
   switch (type) {
   case 0x0B:
-    if (16+len+4 < size) error("Invalid size");
-    out = parse_qualifier_boolean(buf+16, len, 16+len+4 > size ? 0xFFFF : *((uint32_t *)(buf+16+len)));
+    if (check_sum(16+4+1, len, size)) error("Invalid size");
+    out = parse_qualifier_boolean(buf+16, len, !check_sum(16+4, len, size) ? 0xFFFF : *((uint32_t *)(buf+16+len)));
     break;
   case 0x03:
-    if (len+16+4 != size) error("Invalid size");
+    if (!check_sum(16+4, len, size)) error("Invalid size");
     out = parse_qualifier_sint32(buf+16, len, *((int32_t *)(buf+16+len)));
     break;
   case 0x08:
@@ -316,7 +318,7 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
     out.type.basic = MOF_BASIC_TYPE_DATETIME;
     break;
   case 0x0D:
-    // object
+    /* object */
     break;
   default:
     fprintf(stderr, "Warning: unknown variable type 0x%x\n", type);
@@ -335,31 +337,33 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
     else
       out.variable_type = MOF_VARIABLE_BASIC;
   }
-  if (buf2[2] != 0x0 || buf2[3] != 0xFFFFFFFF) error("Invalid unknown");
+  if (buf2[2] != 0x0) error("Invalid unknown");
   uint32_t len = buf2[4];
-  if (20+len > size) error("Invalid size");
+  if (!check_sum(20, len, size)) error("Invalid size");
   uint32_t slen = buf2[3];
   if (slen != 0xFFFFFFFF) {
-    if (20+slen > size || slen > len) error("Invalid size");
+    if (!check_sum(20, slen, size) || slen > len) error("Invalid size");
     out.name = parse_string(buf+20, slen);
     fprintf(stderr, "Warning: Variable value is not supported yet\n");
     dump_bytes(buf+20+slen, len-slen);
   } else {
     out.name = parse_string(buf+20, len);
   }
-  if (20+len+8 > size) error("Invalid size");
+  if (!check_sum(20+8, len, size)) error("Invalid size");
   buf2 = (uint32_t *)(buf+20+len);
   uint32_t len1 = buf2[0];
-  if (20+len+len1 > size) error("Invalid size");
+  if (size < 20 || !check_sum(len, len1, size-20)) error("Invalid size");
   uint32_t count = buf2[1];
   uint32_t i;
   char *tmp = buf+20+len+8;
   out.qualifiers = calloc(count, sizeof(*out.qualifiers));
   if (!out.qualifiers) error("calloc failed");
   for (i=0; i<count; ++i) {
-    if (tmp+4 > buf+20+len+8+len1) error("Invalid size");
+    if (tmp-buf <= 20+8 || tmp-buf >= UINT32_MAX) error("Invalid size");
+    if (!check_sum(len, len1, UINT32_MAX) || !check_sum(20+8, len+len1, UINT32_MAX) || !check_sum(tmp-buf, 4, 20+len+8+len1)) error("Invalid size"); /* if (tmp+4 > buf+20+len+8+len1) */
     uint32_t len2 = ((uint32_t *)tmp)[0];
-    if (len2 == 0 || tmp+len2 > buf+20+len+8+len1) error("Invalid size");
+    if (len2 == 0 || len2 >= len1) error("Invalid size");
+    if (!check_sum(tmp-buf, len2, 20+len+8+len1)) error("Invalid size"); /* if (tmp+len2 > buf+20+len+8+len1) */
     out.qualifiers[out.qualifiers_count] = parse_qualifier(tmp, len2, offset ? offset+tmp-buf : 0);
     if (out.qualifiers[out.qualifiers_count].name) {
       if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_STRING && strcmp(out.qualifiers[out.qualifiers_count].name, "CIMTYPE") == 0) {
@@ -455,7 +459,7 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
   if (buf2[1] != 0x1) error("Invalid unknown");
   uint32_t count = buf2[2];
   uint32_t len = buf2[3];
-  if (len == 0 || len+12 > size) error("Invalid size");
+  if (len == 0 || !check_sum(12, len, size)) error("Invalid size");
   if (len+12 != size) error("Invalid size?");
   uint32_t i;
   char *tmp = buf+16;
@@ -463,14 +467,15 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
   if (!parameters) error("calloc failed");
   for (i=0; i<count; ++i) {
     buf2 = (uint32_t *)tmp;
-    if (tmp+4 > buf+len) error("Invalid size");
+    if (tmp-buf >= UINT32_MAX) error("Invalid size");
+    if (!check_sum(4, tmp-buf, len)) error("Invalid size");
     uint32_t len1 = buf2[0];
-    if (tmp+len1 > buf+16+len) error("Invalid size");
+    if (!check_sum(tmp-buf, len1, 16+len)) error("Invalid size");
     if (len1 < 20) error("Invalid size");
     if (buf2[1] != 0xFFFFFFFF) error("Invalid unknown");
     if (buf2[2] != 0x0) error("Invalid unknown");
     uint32_t len2 = buf2[3];
-    if (tmp+len2+20 > buf+16+len) error("Invalid size");
+    if (len2 >= len || !check_sum(tmp-buf, 20-16, len-len2)) error("Invalid size"); /* if (tmp+len2+20 > buf+16+len) */
     if (buf2[4] != 0x1) error("Invalid unknown");
     parameters[i] = parse_class_data(tmp+20, len2, len2, 0, offset ? offset+tmp+20-buf : 0);
     if (strcmp(parameters[i].name, "__PARAMETERS") != 0) error("Invalid parameters class name");
@@ -606,15 +611,15 @@ static struct mof_method parse_class_method(char *buf, uint32_t size, uint32_t o
   if (len == 0xFFFFFFFF)
     len = buf2[4];
   else {
-    if (20+buf2[4] > size || buf2[4] < len) error("Invalid size");
+    if (!check_sum(20, buf2[4], size) || buf2[4] < len) error("Invalid size");
     parse_class_method_parameters(buf+20+len, buf2[4]-len, &out, offset ? offset+20+len : 0);
   }
-  if (20+len > size) error("Invalid size");
+  if (!check_sum(20, len, size)) error("Invalid size");
   out.name = parse_string(buf+20, len);
   len = buf2[4];
   buf2 = (uint32_t *)(buf+20+len);
   uint32_t len1 = buf2[0];
-  if (20+len+len1 > size) error("Invalid size");
+  if (size < 20 || !check_sum(len, len1, size-20)) error("Invalid size");
   uint32_t count = buf2[1];
   uint32_t i;
   char *tmp = buf+20+len+8;
@@ -622,9 +627,9 @@ static struct mof_method parse_class_method(char *buf, uint32_t size, uint32_t o
   out.qualifiers = calloc(count, sizeof(*out.qualifiers));
   if (!out.qualifiers) error("calloc failed");
   for (i=0; i<count; ++i) {
-    if (tmp+4 > buf+20+len+8+len1) error("Invalid size");
+    if (tmp-buf >= UINT32_MAX || !check_sum(20+8, len+len1, UINT32_MAX) || !check_sum(tmp-buf, 4, 20+len+8+len1)) error("Invalid size"); /* if (tmp+4 > buf+20+len+8+len1) */
     uint32_t len2 = ((uint32_t *)tmp)[0];
-    if (len2 == 0 || tmp+len2 > buf+20+len+8+len1) error("Invalid size");
+    if (len2 == 0 || !check_sum(tmp-buf, len2, 20+len+8+len1)) error("Invalid size"); /* if (tmp+len2 > buf+20+len+8+len1) */
     out.qualifiers[i] = parse_qualifier(tmp, len2, offset ? offset+tmp-buf : 0);
     tmp += len2;
   }
@@ -640,7 +645,7 @@ static void parse_class_property(char *buf, uint32_t size, struct mof_class *out
   if (buf2[2] != 0x0 || buf2[4] != 0xFFFFFFFF) error("Invalid unknown");
   uint32_t type = buf2[1];
   uint32_t slen = buf2[3];
-  if (size < slen+20) error("Invalid size");
+  if (!check_sum(20, slen, size)) error("Invalid size");
   char *name = parse_string(buf+20, slen);
   if (type == 0x08) {
     char *value = parse_string(buf+20+slen, size-slen-20);
@@ -684,9 +689,9 @@ static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size
     out.qualifiers = calloc(count1, sizeof(*out.qualifiers));
     if (!out.qualifiers) error("calloc failed");
     for (i=0; i<count1; ++i) {
-      if (tmp+4 > buf+len1) error("Invalid size");
+      if (tmp-buf >= UINT32_MAX || !check_sum(tmp-buf, 4, len1)) error("Invalid size");
       uint32_t len = ((uint32_t *)tmp)[0];
-      if (len == 0 || tmp+len > buf+len1) error("Invalid size");
+      if (len == 0 || !check_sum(tmp-buf, len, len1)) error("Invalid size");
       out.qualifiers[i] = parse_qualifier(tmp, len, offset ? offset+tmp-buf : 0);
       tmp += len;
     }
@@ -698,14 +703,15 @@ static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size
   buf2 = (uint32_t *)tmp;
   uint32_t len2 = buf2[0];
   uint32_t count2 = buf2[1];
-  if (len1+len2 > size) error("Invalid size");
+  if (!check_sum(len1, len2, size)) error("Invalid size");
   tmp += 8;
   out.variables = calloc(count2, sizeof(*out.variables));
   if (!out.variables) error("calloc failed");
   for (i=0; i<count2; ++i) {
-    if (tmp+4 > buf+len1+len2) error("Invalid size");
+    if (tmp-buf >= UINT32_MAX || !check_sum(len1, len2, UINT32_MAX)) error("Invalid size");
+    if (!check_sum(tmp-buf, 4, len1+len2)) error("Invalid size");
     uint32_t len = ((uint32_t *)tmp)[0];
-    if (len == 0 || tmp+len > buf+len1+len2) error("Invalid size");
+    if (len == 0 || !check_sum(tmp-buf, len, len1+len2)) error("Invalid size");
     if (tmp+16 <= buf+len1+len2 && ((uint32_t *)tmp)[4] == 0xFFFFFFFF) {
       parse_class_property(tmp, len, &out);
     } else {
@@ -715,9 +721,9 @@ static struct mof_class parse_class_data(char *buf, uint32_t size, uint32_t size
     tmp += len;
   }
   while (tmp != buf+size) {
-    if (tmp+4 > buf+size) error("Invalid size");
+    if (tmp-buf >= UINT32_MAX || !check_sum(tmp-buf, 4, size)) error("Invalid size");
     uint32_t len = ((uint32_t *)tmp)[0];
-    if (len == 0 || tmp+len > buf+size) error("Invalid size");
+    if (len == 0 || !check_sum(tmp-buf, len, size)) error("Invalid size");
     parse_class_property(tmp, len, &out);
     tmp += len;
   }
@@ -736,7 +742,7 @@ static struct mof_class parse_class(char *buf, uint32_t size, uint32_t offset) {
   }
   uint32_t len1 = buf2[2];
   uint32_t len = buf2[3];
-  if (len + 20 > size) error("Invalid size");
+  if (!check_sum(20, len, size)) error("Invalid size");
   if (len1 > len) error("Invalid size");
   if (buf2[4] == 0x1) {
     fprintf(stderr, "Warning: Instance of class is not supported yet\n");
@@ -855,9 +861,9 @@ static struct mof_classes parse_root(char *buf, uint32_t size, uint32_t offset) 
   out.classes = calloc(count, sizeof(*out.classes));
   if (!out.classes) error("calloc failed");
   for (i=0; i<count; ++i) {
-    if (tmp+4 > buf+size) error("Invalid size");
+    if (tmp-buf >= UINT32_MAX || !check_sum(tmp-buf, 4, size)) error("Invalid size");
     uint32_t len = ((uint32_t *)tmp)[0];
-    if (len == 0 || tmp+len > buf+size) error("Invalid size");
+    if (len == 0 || !check_sum(tmp-buf, len, size)) error("Invalid size");
     out.classes[i] = parse_class(tmp, len, offset ? offset+tmp-buf : 0);
     tmp += len;
   }
@@ -874,10 +880,10 @@ static struct mof_classes parse_bmf(char *buf, uint32_t size) {
   uint32_t i;
   uint32_t count = 0;
   if (len < size) {
-    if (size-len < 20) error("Invalid size");
+    if (!check_sum(20, len, size)) error("Invalid size");
     if (memcmp(buf+len, "BMOFQUALFLAVOR11", 16) != 0) error("Invalid second magic header");
     count = ((uint32_t *)(buf+len+16))[0];
-    if (8*count != size-len-16-4) error("Invalid size");
+    if (count >= UINT32_MAX/8 || 8*count != size-len-16-4) error("Invalid size");
     for (i=0; i<count; ++i) {
       if (((uint32_t *)(buf+len+16+4))[2*i] == 0) error("Invalid offset in second part");
     }
