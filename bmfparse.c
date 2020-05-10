@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define error(str) do { fprintf(stderr, "error %s at %s:%d\n", str, __func__, __LINE__); exit(1); } while (0)
 
@@ -243,7 +244,7 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size, uint32_t o
       uint32_t type2 = ((uint32_t *)(buf-offset+olen+16+4))[2*i+1];
       switch (type2) {
       case 0x01:
-        if (out.type != MOF_QUALIFIER_BOOLEAN || strcmp(out.name, "Dynamic") != 0) error("qualifier type in second part does not match");
+        if (out.type != MOF_QUALIFIER_BOOLEAN || strcasecmp(out.name, "Dynamic") != 0) error("qualifier type in second part does not match");
         break;
       case 0x02:
         out.tosubclass = 1;
