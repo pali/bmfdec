@@ -119,7 +119,7 @@ struct mof_classes {
 static char *parse_string(char *buf, uint32_t size) {
   uint16_t *buf2 = (uint16_t *)buf;
   if (size % 2 != 0) error("Invalid size");
-  char *out = malloc((size/2)*3+1);
+  char *out = malloc(size+1);
   if (!out) error("malloc failed");
   uint32_t i, j;
   for (i=0, j=0; i<size/2; ++i) {
@@ -130,6 +130,13 @@ static char *parse_string(char *buf, uint32_t size) {
     } else if (buf2[i] < 0x800) {
       out[j++] = 0xC0 | (buf2[i] >> 6);
       out[j++] = 0x80 | (buf2[i] & 0x3F);
+    } else if (buf2[i] >= 0xD800 && buf2[i] <= 0xDBFF && i+1 < size/2 && buf2[i+1] >= 0xDC00 && buf2[i+1] <= 0xDFFF) {
+      uint32_t c = 0x10000 + ((buf2[i] - 0xD800) << 10) + (buf2[i+1] - 0xDC00);
+      ++i;
+      out[j++] = 0xF0 | (c >> 18);
+      out[j++] = 0x80 | ((c >> 12) & 0x3F);
+      out[j++] = 0x80 | ((c >> 6) & 0x3F);
+      out[j++] = 0x80 | (c & 0x3F);
     } else {
       out[j++] = 0xE0 | (buf2[i] >> 12);
       out[j++] = 0x80 | ((buf2[i] >> 6) & 0x3F);
