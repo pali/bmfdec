@@ -46,6 +46,8 @@ enum mof_variable_type {
 enum mof_basic_type {
   MOF_BASIC_TYPE_UNKNOWN,
   MOF_BASIC_TYPE_STRING,
+  MOF_BASIC_TYPE_REAL64,
+  MOF_BASIC_TYPE_REAL32,
   MOF_BASIC_TYPE_SINT32,
   MOF_BASIC_TYPE_UINT32,
   MOF_BASIC_TYPE_SINT16,
@@ -298,6 +300,12 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
   case 0x03:
     out.type.basic = MOF_BASIC_TYPE_SINT32;
     break;
+  case 0x04:
+    out.type.basic = MOF_BASIC_TYPE_REAL32;
+    break;
+  case 0x05:
+    out.type.basic = MOF_BASIC_TYPE_REAL64;
+    break;
   case 0x08:
     out.type.basic = MOF_BASIC_TYPE_STRING;
     break;
@@ -386,6 +394,10 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
           enum mof_basic_type basic_type;
           if (strcasecmp(strtype, "String") == 0)
             basic_type = MOF_BASIC_TYPE_STRING;
+          else if (strcasecmp(strtype, "Real64") == 0)
+            basic_type = MOF_BASIC_TYPE_REAL64;
+          else if (strcasecmp(strtype, "Real32") == 0)
+            basic_type = MOF_BASIC_TYPE_REAL32;
           else if (strcasecmp(strtype, "SInt32") == 0)
             basic_type = MOF_BASIC_TYPE_SINT32;
           else if (strcasecmp(strtype, "UInt32") == 0)
@@ -938,6 +950,8 @@ static void print_variable_type(struct mof_variable *variable, int with_info) {
     variable_type = "Basic";
     switch (variable->type.basic) {
     case MOF_BASIC_TYPE_STRING: type = "String"; break;
+    case MOF_BASIC_TYPE_REAL64: type = "Real64"; break;
+    case MOF_BASIC_TYPE_REAL32: type = "Real32"; break;
     case MOF_BASIC_TYPE_SINT32: type = "SInt32"; break;
     case MOF_BASIC_TYPE_UINT32: type = "UInt32"; break;
     case MOF_BASIC_TYPE_SINT16: type = "SInt16"; break;
