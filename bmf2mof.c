@@ -89,16 +89,27 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
   char *direction;
   uint32_t i, j, k;
   int print_namespace = 0;
+  int print_classflags = 0;
   for (i = 0; i < count; ++i) {
     if (!classes[i].name)
       continue;
-    if (classes[i].namespace && (print_namespace || strcmp(classes[i].namespace, "root\\default") != 0)) {
-      printf("#pragma namespace(\"");
-      print_string(classes[i].namespace);
-      printf("\")\n");
+    if (classes[i].namespace && strcmp(classes[i].namespace, "root\\default") != 0)
       print_namespace = 1;
+    if (classes[i].classflags)
+      print_classflags = 1;
+  }
+  for (i = 0; i < count; ++i) {
+    if (!classes[i].name)
+      continue;
+    if (print_namespace) {
+      printf("#pragma namespace(\"");
+      if (classes[i].namespace)
+        print_string(classes[i].namespace);
+      else
+        print_string("root\\default");
+      printf("\")\n");
     }
-    if (classes[i].classflags) {
+    if (print_classflags) {
       printf("#pragma classflags(");
       if (classes[i].classflags == 1)
         printf("\"updateonly\"");
