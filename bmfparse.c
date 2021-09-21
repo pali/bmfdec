@@ -91,7 +91,8 @@ struct mof_variable {
     enum mof_basic_type basic;
     char *object;
   } type;
-  int32_t array;
+  int32_t array_max;
+  uint8_t has_array_max;
 };
 
 struct mof_method {
@@ -427,7 +428,8 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
           if (basic_type != out.type.basic) error("basic type does not match");
         }
       } else if (out.qualifiers[out.qualifiers_count].type == MOF_QUALIFIER_SINT32 && strcmp(out.qualifiers[out.qualifiers_count].name, "MAX") == 0 && is_array) {
-        out.array = out.qualifiers[out.qualifiers_count].value.sint32;
+        out.array_max = out.qualifiers[out.qualifiers_count].value.sint32;
+        out.has_array_max = 1;
         free(out.qualifiers[out.qualifiers_count].name);
       } else {
         out.qualifiers_count++;
@@ -460,7 +462,7 @@ static int cmp_qualifiers(struct mof_qualifier *a, struct mof_qualifier *b) {
 static int cmp_variables(struct mof_variable *a, struct mof_variable *b) {
   if (strcmp(a->name, b->name) != 0 || a->variable_type != b->variable_type)
     return 1;
-  if ((a->variable_type == MOF_VARIABLE_BASIC_ARRAY || a->variable_type == MOF_VARIABLE_OBJECT_ARRAY) && a->array != b->array)
+  if ((a->variable_type == MOF_VARIABLE_BASIC_ARRAY || a->variable_type == MOF_VARIABLE_OBJECT_ARRAY) && (a->has_array_max != b->has_array_max || a->array_max != b->array_max))
     return 1;
   switch (a->variable_type) {
   case MOF_VARIABLE_BASIC:
@@ -984,8 +986,12 @@ static void print_variable_type(struct mof_variable *variable, int with_info) {
     printf("%s", variable_type);
     if (type)
       printf(":%s", type);
-    if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY)
-      printf("[%d]", variable->array);
+    if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
+      printf("[");
+      if (variable->has_array_max)
+        printf("%d", variable->array_max);
+      printf("]");
+    }
   } else {
     printf("%s", type ? type : "unknown");
   }

@@ -90,8 +90,12 @@ static void print_variable(struct mof_variable *variable, char *prefix) {
   print_variable_type(variable, 0);
   printf(" ");
   print_string(variable->name);
-  if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY)
-    printf("[%d]", variable->array);
+  if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
+    printf("[");
+    if (variable->has_array_max)
+      printf("%d", variable->array_max);
+    printf("]");
+  }
 }
 
 static void print_classes(struct mof_class *classes, uint32_t count) {
