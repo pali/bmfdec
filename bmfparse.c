@@ -71,7 +71,10 @@ enum mof_parameter_direction {
 struct mof_qualifier {
   enum mof_qualifier_type type;
   char *name;
-  uint8_t tosubclass;
+  uint8_t toinstance:1;
+  uint8_t tosubclass:1;
+  uint8_t disableoverride:1;
+  uint8_t amended:1;
   union {
     uint8_t boolean;
     int32_t sint32;
@@ -251,24 +254,17 @@ static struct mof_qualifier parse_qualifier(char *buf, uint32_t size, uint32_t o
       if (*offset_addr != offset)
         continue;
       *offset_addr = 0;
-      uint32_t type2 = ((uint32_t *)(buf-offset+olen+16+4))[2*i+1];
-      switch (type2) {
-      case 0x01:
-        if (out.type != MOF_QUALIFIER_BOOLEAN || strcasecmp(out.name, "Dynamic") != 0) error("qualifier type in second part does not match");
-        break;
-      case 0x02:
+      uint32_t flavors = ((uint32_t *)(buf-offset+olen+16+4))[2*i+1];
+      if (flavors & (1U << 0))
+        out.toinstance = 1;
+      if (flavors & (1U << 1))
         out.tosubclass = 1;
-        break;
-      case 0x03:
-        if (out.type != MOF_QUALIFIER_STRING || strcmp(out.name, "CIMTYPE") != 0) error("qualifier type in second part does not match");
-        break;
-      case 0x11:
-        if (out.type != MOF_QUALIFIER_SINT32 || strcmp(out.name, "ID") != 0) error("qualifier type in second part does not match");
-        break;
-      default:
-        fprintf(stderr, "Warning: Unknown qualifier type in second part 0x%x for %s\n", type2, out.name);
-        break;
-      }
+      if (flavors & (1U << 4))
+        out.disableoverride = 1;
+      if (flavors & (1U << 7))
+        out.amended = 1;
+      if (flavors & ~((1U << 0) | (1U << 1) | (1U << 4) | (1U << 7)))
+        fprintf(stderr, "Warning: Unknown qualifier flavors 0x%x in second part for %s\n", flavors, out.name);
     }
   }
   return out;
@@ -926,7 +922,11 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
   for (i = 0; i < count; ++i) {
     printf("%*.sQualifier %u:\n", indent, "", i);
     printf("%*.s  Name=%s\n", indent, "", qualifiers[i].name);
-    printf("%*.s  Tosubclass=%s\n", indent, "", qualifiers[i].tosubclass ? "TRUE" : "FALSE");
+    printf("%*.s  Flavors:\n", indent, "");
+    printf("%*.s    ToInstance=%s\n", indent, "", qualifiers[i].toinstance ? "TRUE" : "FALSE");
+    printf("%*.s    ToSubclass=%s\n", indent, "", qualifiers[i].tosubclass ? "TRUE" : "FALSE");
+    printf("%*.s    DisableOverride=%s\n", indent, "", qualifiers[i].disableoverride ? "TRUE" : "FALSE");
+    printf("%*.s    Amended=%s\n", indent, "", qualifiers[i].amended ? "TRUE" : "FALSE");
     switch (qualifiers[i].type) {
     case MOF_QUALIFIER_BOOLEAN:
       printf("%*.s  Type=Boolean\n", indent, "");

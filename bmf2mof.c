@@ -64,8 +64,17 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, c
         printf("unknown");
         break;
       }
-      if (qualifiers[i].tosubclass)
-        printf(" : ToSubclass");
+      if (qualifiers[i].toinstance || qualifiers[i].tosubclass || qualifiers[i].disableoverride || qualifiers[i].amended) {
+        printf(" :");
+        if (qualifiers[i].toinstance)
+          printf(" ToInstance");
+        if (qualifiers[i].tosubclass)
+          printf(" ToSubclass");
+        if (qualifiers[i].disableoverride)
+          printf(" DisableOverride");
+        if (qualifiers[i].amended)
+          printf(" Amended");
+      }
       if (i != count-1)
         printf(", ");
     }
