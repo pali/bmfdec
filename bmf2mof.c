@@ -98,8 +98,24 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       printf("\")\n");
       print_namespace = 1;
     }
-    if (classes[i].classflags)
-      printf("#pragma classflags(%d)\n", (int)classes[i].classflags);
+    if (classes[i].classflags) {
+      printf("#pragma classflags(");
+      if (classes[i].classflags == 1)
+        printf("\"updateonly\"");
+      else if (classes[i].classflags == 2)
+        printf("\"createonly\"");
+      else if (classes[i].classflags == 32)
+        printf("\"safeupdate\"");
+      else if (classes[i].classflags == 33)
+        printf("\"updateonly\", \"safeupdate\"");
+      else if (classes[i].classflags == 64)
+        printf("\"forceupdate\"");
+      else if (classes[i].classflags == 65)
+        printf("\"updateonly\", \"forceupdate\"");
+      else
+        printf("%d", (int)classes[i].classflags);
+      printf(")\n");
+    }
     if (classes[i].qualifiers_count > 0) {
       print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, NULL);
       printf("\n");
