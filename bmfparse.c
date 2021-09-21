@@ -949,7 +949,7 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, i
   }
 }
 
-static void print_variable_type(struct mof_variable *variable, int with_info) {
+static void print_variable_type(struct mof_variable *variable) {
   char *variable_type = "unknown";
   char *type = NULL;
   switch (variable->variable_type) {
@@ -982,25 +982,21 @@ static void print_variable_type(struct mof_variable *variable, int with_info) {
   default:
     break;
   }
-  if (with_info) {
-    printf("%s", variable_type);
-    if (type)
-      printf(":%s", type);
-    if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
-      printf("[");
-      if (variable->has_array_max)
-        printf("%d", variable->array_max);
-      printf("]");
-    }
-  } else {
-    printf("%s", type ? type : "unknown");
+  printf("%s", variable_type);
+  if (type)
+    printf(":%s", type);
+  if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
+    printf("[");
+    if (variable->has_array_max)
+      printf("%d", variable->array_max);
+    printf("]");
   }
 }
 
 static void print_variable(struct mof_variable *variable, int indent) {
   printf("%*.s  Name=%s\n", indent, "", variable->name);
   printf("%*.s  Type=", indent, "");
-  print_variable_type(variable, 1);
+  print_variable_type(variable);
   printf("\n");
   print_qualifiers(variable->qualifiers, variable->qualifiers_count, indent+2);
 }
@@ -1054,7 +1050,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
       printf("    Return value:\n");
       printf("      Type=");
       if (classes[i].methods[j].return_value.variable_type)
-         print_variable_type(&classes[i].methods[j].return_value, 1);
+         print_variable_type(&classes[i].methods[j].return_value);
       else
          printf("Void");
       printf("\n");

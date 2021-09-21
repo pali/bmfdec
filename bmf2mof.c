@@ -19,10 +19,12 @@
 #define print_classes bmfparse_print_classes
 #define print_variable bmfparse_print_variable
 #define print_qualifiers bmfparse_print_qualifiers
+#define print_variable_type bmfparse_print_variable_type
 #include "bmfparse.c"
 #undef print_classes
 #undef print_variable
 #undef print_qualifiers
+#undef print_variable_type
 
 static void print_string(char *str) {
   int len = strlen(str);
@@ -82,12 +84,45 @@ static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, c
   }
 }
 
+static void print_variable_type(struct mof_variable *variable) {
+  char *type = NULL;
+  switch (variable->variable_type) {
+  case MOF_VARIABLE_BASIC:
+  case MOF_VARIABLE_BASIC_ARRAY:
+    switch (variable->type.basic) {
+    case MOF_BASIC_TYPE_STRING: type = "string"; break;
+    case MOF_BASIC_TYPE_REAL64: type = "real64"; break;
+    case MOF_BASIC_TYPE_REAL32: type = "real32"; break;
+    case MOF_BASIC_TYPE_SINT32: type = "sint32"; break;
+    case MOF_BASIC_TYPE_UINT32: type = "uint32"; break;
+    case MOF_BASIC_TYPE_SINT16: type = "sint16"; break;
+    case MOF_BASIC_TYPE_UINT16: type = "uint16"; break;
+    case MOF_BASIC_TYPE_SINT64: type = "sint64"; break;
+    case MOF_BASIC_TYPE_UINT64: type = "uint64"; break;
+    case MOF_BASIC_TYPE_SINT8: type = "sint8"; break;
+    case MOF_BASIC_TYPE_UINT8: type = "uint8"; break;
+    case MOF_BASIC_TYPE_DATETIME: type = "datetime"; break;
+    case MOF_BASIC_TYPE_CHAR16: type = "char16"; break;
+    case MOF_BASIC_TYPE_BOOLEAN: type = "boolean"; break;
+    default: break;
+    }
+    break;
+  case MOF_VARIABLE_OBJECT:
+  case MOF_VARIABLE_OBJECT_ARRAY:
+    type = variable->type.object;
+    break;
+  default:
+    break;
+  }
+  printf("%s", type ? type : "unknown");
+}
+
 static void print_variable(struct mof_variable *variable, char *prefix) {
   if (variable->qualifiers_count > 0 || prefix) {
     print_qualifiers(variable->qualifiers, variable->qualifiers_count, prefix);
     printf(" ");
   }
-  print_variable_type(variable, 0);
+  print_variable_type(variable);
   printf(" ");
   print_string(variable->name);
   if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
@@ -167,7 +202,7 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
         printf(" ");
       }
       if (classes[i].methods[j].return_value.variable_type)
-        print_variable_type(&classes[i].methods[j].return_value, 0);
+        print_variable_type(&classes[i].methods[j].return_value);
       else
         printf("void");
       printf(" ");
