@@ -384,27 +384,27 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
         } else {
           char *strtype = out.qualifiers[out.qualifiers_count].value.string;
           enum mof_basic_type basic_type;
-          if (strcmp(strtype, "String") == 0 || strcmp(strtype, "string") == 0)
+          if (strcasecmp(strtype, "String") == 0)
             basic_type = MOF_BASIC_TYPE_STRING;
-          else if (strcmp(strtype, "sint32") == 0)
+          else if (strcasecmp(strtype, "SInt32") == 0)
             basic_type = MOF_BASIC_TYPE_SINT32;
-          else if (strcmp(strtype, "uint32") == 0)
+          else if (strcasecmp(strtype, "UInt32") == 0)
             basic_type = MOF_BASIC_TYPE_UINT32;
-          else if (strcmp(strtype, "sint16") == 0)
+          else if (strcasecmp(strtype, "SInt16") == 0)
             basic_type = MOF_BASIC_TYPE_SINT16;
-          else if (strcmp(strtype, "uint16") == 0)
+          else if (strcasecmp(strtype, "UInt16") == 0)
             basic_type = MOF_BASIC_TYPE_UINT16;
-          else if (strcmp(strtype, "sint64") == 0)
+          else if (strcasecmp(strtype, "SInt64") == 0)
             basic_type = MOF_BASIC_TYPE_SINT64;
-          else if (strcmp(strtype, "uint64") == 0)
+          else if (strcasecmp(strtype, "UInt64") == 0)
             basic_type = MOF_BASIC_TYPE_UINT64;
-          else if (strcmp(strtype, "sint8") == 0)
+          else if (strcasecmp(strtype, "SInt8") == 0)
             basic_type = MOF_BASIC_TYPE_SINT8;
-          else if (strcmp(strtype, "uint8") == 0)
+          else if (strcasecmp(strtype, "UInt8") == 0)
             basic_type = MOF_BASIC_TYPE_UINT8;
-          else if (strcmp(strtype, "Datetime") == 0 || strcmp(strtype, "datetime") == 0)
+          else if (strcasecmp(strtype, "Datetime") == 0)
             basic_type = MOF_BASIC_TYPE_DATETIME;
-          else if (strcmp(strtype, "Boolean") == 0 || strcmp(strtype, "boolean") == 0)
+          else if (strcasecmp(strtype, "Boolean") == 0)
             basic_type = MOF_BASIC_TYPE_BOOLEAN;
           else
             error("unknown basic type");
@@ -938,14 +938,14 @@ static void print_variable_type(struct mof_variable *variable, int with_info) {
     variable_type = "Basic";
     switch (variable->type.basic) {
     case MOF_BASIC_TYPE_STRING: type = "String"; break;
-    case MOF_BASIC_TYPE_SINT32: type = "sint32"; break;
-    case MOF_BASIC_TYPE_UINT32: type = "uint32"; break;
-    case MOF_BASIC_TYPE_SINT16: type = "sint16"; break;
-    case MOF_BASIC_TYPE_UINT16: type = "uint16"; break;
-    case MOF_BASIC_TYPE_SINT64: type = "sint64"; break;
-    case MOF_BASIC_TYPE_UINT64: type = "uint64"; break;
-    case MOF_BASIC_TYPE_SINT8: type = "sint8"; break;
-    case MOF_BASIC_TYPE_UINT8: type = "uint8"; break;
+    case MOF_BASIC_TYPE_SINT32: type = "SInt32"; break;
+    case MOF_BASIC_TYPE_UINT32: type = "UInt32"; break;
+    case MOF_BASIC_TYPE_SINT16: type = "SInt16"; break;
+    case MOF_BASIC_TYPE_UINT16: type = "UInt16"; break;
+    case MOF_BASIC_TYPE_SINT64: type = "SInt64"; break;
+    case MOF_BASIC_TYPE_UINT64: type = "UInt64"; break;
+    case MOF_BASIC_TYPE_SINT8: type = "SInt8"; break;
+    case MOF_BASIC_TYPE_UINT8: type = "UInt8"; break;
     case MOF_BASIC_TYPE_DATETIME: type = "Datetime"; break;
     case MOF_BASIC_TYPE_BOOLEAN: type = "Boolean"; break;
     default: type = "unknown"; break;
