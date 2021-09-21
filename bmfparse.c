@@ -57,6 +57,7 @@ enum mof_basic_type {
   MOF_BASIC_TYPE_SINT8,
   MOF_BASIC_TYPE_UINT8,
   MOF_BASIC_TYPE_DATETIME,
+  MOF_BASIC_TYPE_CHAR16,
   MOF_BASIC_TYPE_BOOLEAN,
 };
 
@@ -333,6 +334,9 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
   case 0x65:
     out.type.basic = MOF_BASIC_TYPE_DATETIME;
     break;
+  case 0x67:
+    out.type.basic = MOF_BASIC_TYPE_CHAR16;
+    break;
   case 0x0D:
     /* object */
     break;
@@ -416,6 +420,8 @@ static struct mof_variable parse_class_variable(char *buf, uint32_t size, uint32
             basic_type = MOF_BASIC_TYPE_UINT8;
           else if (strcasecmp(strtype, "Datetime") == 0)
             basic_type = MOF_BASIC_TYPE_DATETIME;
+          else if (strcasecmp(strtype, "Char16") == 0)
+            basic_type = MOF_BASIC_TYPE_CHAR16;
           else if (strcasecmp(strtype, "Boolean") == 0)
             basic_type = MOF_BASIC_TYPE_BOOLEAN;
           else
@@ -961,6 +967,7 @@ static void print_variable_type(struct mof_variable *variable, int with_info) {
     case MOF_BASIC_TYPE_SINT8: type = "SInt8"; break;
     case MOF_BASIC_TYPE_UINT8: type = "UInt8"; break;
     case MOF_BASIC_TYPE_DATETIME: type = "Datetime"; break;
+    case MOF_BASIC_TYPE_CHAR16: type = "Char16"; break;
     case MOF_BASIC_TYPE_BOOLEAN: type = "Boolean"; break;
     default: type = "unknown"; break;
     }
