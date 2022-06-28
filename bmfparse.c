@@ -573,13 +573,13 @@ static void parse_class_method_parameters(char *buf, uint32_t size, struct mof_m
               strcmp(variable.qualifiers[k].name, "ID") == 0)
             continue;
           if (variable.qualifiers[k].type == MOF_QUALIFIER_BOOLEAN) {
-            if (strcmp(variable.qualifiers[k].name, "in") == 0) {
+            if (strcasecmp(variable.qualifiers[k].name, "in") == 0) {
               if (!out->parameters_direction[id])
                 out->parameters_direction[id] = MOF_PARAMETER_IN;
               else
                 out->parameters_direction[id] = MOF_PARAMETER_IN_OUT;
               continue;
-            } else if (strcmp(variable.qualifiers[k].name, "out") == 0) {
+            } else if (strcasecmp(variable.qualifiers[k].name, "out") == 0) {
               if (!out->parameters_direction[id])
                 out->parameters_direction[id] = MOF_PARAMETER_OUT;
               else
