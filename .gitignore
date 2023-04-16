@@ -1,0 +1,4 @@
+# Ignore executables
+bmfdec
+bmfparse
+bmf2mof
