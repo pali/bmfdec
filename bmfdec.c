@@ -18,9 +18,9 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <unistd.h>
 
 #define INLINE static inline
 
@@ -258,35 +258,115 @@ int ds_dec(void* pin,int lin, void* pout, int lout, int flg)
  * M*8 bytes: second part data
  */
 
-static int process_data(char *data, uint32_t size) {
-  ssize_t ret = write(1, data, size);
-  return (ret > 0 && ret == size) ? 0 : 1;
+static int process_data(char *data, uint32_t size, FILE *fout) {
+  size_t ret = fwrite(data, 1, size, fout);
+  return (ret == size) ? 0 : 1;
 }
 
 #undef process_data
-static int process_data(char *data, uint32_t size);
+static int process_data(char *data, uint32_t size, FILE *fout);
 
-int main() {
-  static uint32_t pin[0x10000/4];
-  static char pout[0x40000];
-  ssize_t lin;
-  int lout;
-  lin = read(0, pin, sizeof(pin));
-  if (lin < 0) {
-    fprintf(stderr, "Failed to read data: %s\n", strerror(errno));
-    return 1;
-  } else if (lin == sizeof(pin)) {
-    fprintf(stderr, "Failed to read data: %s\n", strerror(EFBIG));
+int main(int argc, char *argv[]) {
+  FILE *fin;
+  FILE *fout;
+  uint32_t *pin;
+  char *pout;
+  long sin;
+  size_t lin;
+  uint32_t lout;
+  int ret;
+  if ((argc != 1 && argc != 2 && argc != 3) || (argc >= 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))) {
+    fprintf(stderr, "Usage: %s [input_file [output_file]]\n", argv[0]);
     return 1;
   }
-  if (lin <= 16 || pin[0] != 0x424D4F46 || pin[1] != 0x01 || pin[2] != (uint32_t)lin-16 || pin[3] > sizeof(pout)) {
+  if (argc >= 2) {
+    fin = fopen(argv[1], "rb");
+    if (!fin) {
+      fprintf(stderr, "Cannot open input file %s: %s\n", argv[1], strerror(errno));
+      return 1;
+    }
+  } else {
+    fin = stdin;
+  }
+  if (fseek(fin, 0, SEEK_END) == 0) {
+    sin = ftell(fin);
+    if (sin < 0) {
+      fprintf(stderr, "Cannot determinate size of input file %s: %s\n", argc >= 2 ? argv[1] : "(stdin)", strerror(errno));
+      if (argc >= 2)
+        fclose(fin);
+      return 1;
+    }
+    ++sin;
+    rewind(fin);
+    if (sin > 0x800000) {
+      fprintf(stderr, "Size of input file %s too large\n", argc >= 2 ? argv[1] : "(stdin)");
+      if (argc >= 2)
+        fclose(fin);
+      return 1;
+    }
+  } else {
+    sin = 0x800000;
+  }
+  pin = malloc(sin);
+  if (!pin) {
+    fprintf(stderr, "Cannot allocate memory for input file %s\n", argc >= 2 ? argv[1] : "(stdin)");
+    if (argc >= 2)
+      fclose(fin);
+    return 1;
+  }
+  lin = fread(pin, 1, sin, fin);
+  if (ferror(fin)) {
+    fprintf(stderr, "Failed to read data from input file %s\n", argc >= 2 ? argv[1] : "(stdin)");
+    free(pin);
+    if (argc >= 2)
+      fclose(fin);
+    return 1;
+  } else if (!feof(fin)) {
+    fprintf(stderr, "Data too large in input file %s\n", argc >= 2 ? argv[1] : "(stdin)");
+    free(pin);
+    if (argc >= 2)
+      fclose(fin);
+    return 1;
+  }
+  if (argc >= 2)
+    fclose(fin);
+  if (lin <= 16 || pin[0] != 0x424D4F46 || pin[1] != 0x00000001 || pin[2] != (uint32_t)lin-16) {
     fprintf(stderr, "Invalid input\n");
+    free(pin);
     return 1;
   }
   lout = pin[3];
-  if (ds_dec((char *)pin+16, lin-16, pout, lout, 0) != lout) {
-    fprintf(stderr, "Decompress failed\n");
+  if (lout > 0x2000000) {
+    fprintf(stderr, "Invalid input\n");
+    free(pin);
     return 1;
   }
-  return process_data(pout, lout);
+  pout = malloc(lout);
+  if (!pout) {
+    fprintf(stderr, "Cannot allocate memory for decompression\n");
+    free(pin);
+    return 1;
+  }
+  if (ds_dec((char *)pin+16, lin-16, pout, lout, 0) != (int)lout) {
+    fprintf(stderr, "Decompress failed\n");
+    free(pin);
+    free(pout);
+    return 1;
+  }
+  free(pin);
+  if (argc >= 3) {
+    fout = fopen(argv[2], "wb");
+    if (!fout) {
+      fprintf(stderr, "Cannot open output file %s: %s\n", argv[2], strerror(errno));
+      free(pout);
+      return 1;
+    }
+  } else {
+    fout = stdout;
+  }
+  ret = process_data(pout, lout, fout);
+  free(pout);
+  if (argc >= 3)
+    fclose(fout);
+  return ret;
 }

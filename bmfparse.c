@@ -919,37 +919,37 @@ static struct mof_classes parse_bmf(char *buf, uint32_t size) {
   return out;
 }
 
-static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, int indent) {
+static void print_qualifiers(FILE *fout, struct mof_qualifier *qualifiers, uint32_t count, int indent) {
   uint32_t i;
   for (i = 0; i < count; ++i) {
-    printf("%*.sQualifier %u:\n", indent, "", i);
-    printf("%*.s  Name=%s\n", indent, "", qualifiers[i].name);
-    printf("%*.s  Flavors:\n", indent, "");
-    printf("%*.s    ToInstance=%s\n", indent, "", qualifiers[i].toinstance ? "TRUE" : "FALSE");
-    printf("%*.s    ToSubclass=%s\n", indent, "", qualifiers[i].tosubclass ? "TRUE" : "FALSE");
-    printf("%*.s    DisableOverride=%s\n", indent, "", qualifiers[i].disableoverride ? "TRUE" : "FALSE");
-    printf("%*.s    Amended=%s\n", indent, "", qualifiers[i].amended ? "TRUE" : "FALSE");
+    fprintf(fout, "%*.sQualifier %u:\n", indent, "", i);
+    fprintf(fout, "%*.s  Name=%s\n", indent, "", qualifiers[i].name);
+    fprintf(fout, "%*.s  Flavors:\n", indent, "");
+    fprintf(fout, "%*.s    ToInstance=%s\n", indent, "", qualifiers[i].toinstance ? "TRUE" : "FALSE");
+    fprintf(fout, "%*.s    ToSubclass=%s\n", indent, "", qualifiers[i].tosubclass ? "TRUE" : "FALSE");
+    fprintf(fout, "%*.s    DisableOverride=%s\n", indent, "", qualifiers[i].disableoverride ? "TRUE" : "FALSE");
+    fprintf(fout, "%*.s    Amended=%s\n", indent, "", qualifiers[i].amended ? "TRUE" : "FALSE");
     switch (qualifiers[i].type) {
     case MOF_QUALIFIER_BOOLEAN:
-      printf("%*.s  Type=Boolean\n", indent, "");
-      printf("%*.s  Value=%s\n", indent, "", qualifiers[i].value.boolean ? "TRUE" : "FALSE");
+      fprintf(fout, "%*.s  Type=Boolean\n", indent, "");
+      fprintf(fout, "%*.s  Value=%s\n", indent, "", qualifiers[i].value.boolean ? "TRUE" : "FALSE");
       break;
     case MOF_QUALIFIER_SINT32:
-      printf("%*.s  Type=Numeric\n", indent, "");
-      printf("%*.s  Value=%d\n", indent, "", qualifiers[i].value.sint32);
+      fprintf(fout, "%*.s  Type=Numeric\n", indent, "");
+      fprintf(fout, "%*.s  Value=%d\n", indent, "", qualifiers[i].value.sint32);
       break;
     case MOF_QUALIFIER_STRING:
-      printf("%*.s  Type=String\n", indent, "");
-      printf("%*.s  Value=%s\n", indent, "", qualifiers[i].value.string);
+      fprintf(fout, "%*.s  Type=String\n", indent, "");
+      fprintf(fout, "%*.s  Value=%s\n", indent, "", qualifiers[i].value.string);
       break;
     default:
-      printf("%*.s  Type=Unknown\n", indent, "");
+      fprintf(fout, "%*.s  Type=Unknown\n", indent, "");
       break;
     }
   }
 }
 
-static void print_variable_type(struct mof_variable *variable) {
+static void print_variable_type(FILE *fout, struct mof_variable *variable) {
   char *variable_type = "unknown";
   char *type = NULL;
   switch (variable->variable_type) {
@@ -982,90 +982,90 @@ static void print_variable_type(struct mof_variable *variable) {
   default:
     break;
   }
-  printf("%s", variable_type);
+  fprintf(fout, "%s", variable_type);
   if (type)
-    printf(":%s", type);
+    fprintf(fout, ":%s", type);
   if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
-    printf("[");
+    fprintf(fout, "[");
     if (variable->has_array_max)
-      printf("%d", variable->array_max);
-    printf("]");
+      fprintf(fout, "%d", variable->array_max);
+    fprintf(fout, "]");
   }
 }
 
-static void print_variable(struct mof_variable *variable, int indent) {
-  printf("%*.s  Name=%s\n", indent, "", variable->name);
-  printf("%*.s  Type=", indent, "");
-  print_variable_type(variable);
-  printf("\n");
-  print_qualifiers(variable->qualifiers, variable->qualifiers_count, indent+2);
+static void print_variable(FILE *fout, struct mof_variable *variable, int indent) {
+  fprintf(fout, "%*.s  Name=%s\n", indent, "", variable->name);
+  fprintf(fout, "%*.s  Type=", indent, "");
+  print_variable_type(fout, variable);
+  fprintf(fout, "\n");
+  print_qualifiers(fout, variable->qualifiers, variable->qualifiers_count, indent+2);
 }
 
-static void print_variables(struct mof_variable *variables, uint32_t count) {
+static void print_variables(FILE *fout, struct mof_variable *variables, uint32_t count) {
   uint32_t i;
   for (i = 0; i < count; ++i) {
-    printf("  Variable %u:\n", i);
-    print_variable(&variables[i], 2);
+    fprintf(fout, "  Variable %u:\n", i);
+    print_variable(fout, &variables[i], 2);
   }
 }
 
-static void print_parameters(struct mof_method *method) {
+static void print_parameters(FILE *fout, struct mof_method *method) {
   uint32_t i;
   for (i = 0; i < method->parameters_count; ++i) {
-    printf("    Parameter %u:\n", i);
-    printf("      Direction=");
+    fprintf(fout, "    Parameter %u:\n", i);
+    fprintf(fout, "      Direction=");
     switch (method->parameters_direction[i]) {
     case MOF_PARAMETER_IN:
-      printf("in");
+      fprintf(fout, "in");
       break;
     case MOF_PARAMETER_OUT:
-      printf("out");
+      fprintf(fout, "out");
       break;
     case MOF_PARAMETER_IN_OUT:
-      printf("in+out");
+      fprintf(fout, "in+out");
       break;
     default:
-      printf("unknown");
+      fprintf(fout, "unknown");
       break;
     }
-    printf("\n");
-    print_variable(&method->parameters[i], 4);
+    fprintf(fout, "\n");
+    print_variable(fout, &method->parameters[i], 4);
   }
 }
 
-static void print_classes(struct mof_class *classes, uint32_t count) {
+static void print_classes(FILE *fout, struct mof_class *classes, uint32_t count) {
   uint32_t i, j;
   for (i = 0; i < count; ++i) {
-    printf("Class %u:\n", i);
-    printf("  Name=%s\n", classes[i].name);
-    printf("  Superclassname=%s\n", classes[i].superclassname);
-    printf("  Classflags=%d\n", (int)classes[i].classflags);
-    printf("  Namespace=%s\n", classes[i].namespace);
-    print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, 2);
-    print_variables(classes[i].variables, classes[i].variables_count);
+    fprintf(fout, "Class %u:\n", i);
+    fprintf(fout, "  Name=%s\n", classes[i].name);
+    fprintf(fout, "  Superclassname=%s\n", classes[i].superclassname);
+    fprintf(fout, "  Classflags=%d\n", (int)classes[i].classflags);
+    fprintf(fout, "  Namespace=%s\n", classes[i].namespace);
+    print_qualifiers(fout, classes[i].qualifiers, classes[i].qualifiers_count, 2);
+    print_variables(fout, classes[i].variables, classes[i].variables_count);
     for (j = 0; j < classes[i].methods_count; ++j) {
-      printf("  Method %u:\n", j);
-      printf("    Name=%s\n", classes[i].methods[j].name);
-      print_qualifiers(classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, 4);
-      printf("    Return value:\n");
-      printf("      Type=");
+      fprintf(fout, "  Method %u:\n", j);
+      fprintf(fout, "    Name=%s\n", classes[i].methods[j].name);
+      print_qualifiers(fout, classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, 4);
+      fprintf(fout, "    Return value:\n");
+      fprintf(fout, "      Type=");
       if (classes[i].methods[j].return_value.variable_type)
-         print_variable_type(&classes[i].methods[j].return_value);
+         print_variable_type(fout, &classes[i].methods[j].return_value);
       else
-         printf("Void");
-      printf("\n");
-      print_parameters(&classes[i].methods[j]);
+         fprintf(fout, "Void");
+      fprintf(fout, "\n");
+      print_parameters(fout, &classes[i].methods[j]);
     }
   }
 }
 
 #undef print_classes
-static void print_classes(struct mof_class *classes, uint32_t count);
+static void print_classes(FILE *fout, struct mof_class *classes, uint32_t count);
 
-static int process_data(char *data, uint32_t size) {
+static int process_data(char *data, uint32_t size, FILE *fout) {
   struct mof_classes classes;
   classes = parse_bmf(data, size);
-  print_classes(classes.classes, classes.count);
+  print_classes(fout, classes.classes, classes.count);
   free_classes(classes.classes, classes.count);
   return 0;
 }

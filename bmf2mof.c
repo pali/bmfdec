@@ -26,65 +26,65 @@
 #undef print_qualifiers
 #undef print_variable_type
 
-static void print_string(char *str) {
+static void print_string(FILE *fout, char *str) {
   int len = strlen(str);
   int i;
   for (i=0; i<len; ++i) {
     if (str[i] == '"' || str[i] == '\\')
-      putchar('\\');
-    putchar(str[i]);
+      fputc('\\', fout);
+    fputc(str[i], fout);
   }
 }
 
-static void print_qualifiers(struct mof_qualifier *qualifiers, uint32_t count, char *prefix) {
+static void print_qualifiers(FILE *fout, struct mof_qualifier *qualifiers, uint32_t count, char *prefix) {
   uint32_t i;
   if (count > 0 || prefix) {
-    printf("[");
+    fprintf(fout, "[");
     if (prefix) {
-      printf("%s", prefix);
+      fprintf(fout, "%s", prefix);
       if (count > 0)
-        printf(", ");
+        fprintf(fout, ", ");
     }
     for (i = 0; i < count; ++i) {
       switch (qualifiers[i].type) {
       case MOF_QUALIFIER_BOOLEAN:
-        print_string(qualifiers[i].name);
+        print_string(fout, qualifiers[i].name);
         if (!qualifiers[i].value.boolean)
-          printf("(FALSE)");
+          fprintf(fout, "(FALSE)");
         break;
       case MOF_QUALIFIER_SINT32:
-        print_string(qualifiers[i].name);
-        printf("(%d)", qualifiers[i].value.sint32);
+        print_string(fout, qualifiers[i].name);
+        fprintf(fout, "(%d)", qualifiers[i].value.sint32);
         break;
       case MOF_QUALIFIER_STRING:
-        print_string(qualifiers[i].name);
-        printf("(\"");
-        print_string(qualifiers[i].value.string);
-        printf("\")");
+        print_string(fout, qualifiers[i].name);
+        fprintf(fout, "(\"");
+        print_string(fout, qualifiers[i].value.string);
+        fprintf(fout, "\")");
         break;
       default:
-        printf("unknown");
+        fprintf(fout, "unknown");
         break;
       }
       if (qualifiers[i].toinstance || qualifiers[i].tosubclass || qualifiers[i].disableoverride || qualifiers[i].amended) {
-        printf(" :");
+        fprintf(fout, " :");
         if (qualifiers[i].toinstance)
-          printf(" ToInstance");
+          fprintf(fout, " ToInstance");
         if (qualifiers[i].tosubclass)
-          printf(" ToSubclass");
+          fprintf(fout, " ToSubclass");
         if (qualifiers[i].disableoverride)
-          printf(" DisableOverride");
+          fprintf(fout, " DisableOverride");
         if (qualifiers[i].amended)
-          printf(" Amended");
+          fprintf(fout, " Amended");
       }
       if (i != count-1)
-        printf(", ");
+        fprintf(fout, ", ");
     }
-    printf("]");
+    fprintf(fout, "]");
   }
 }
 
-static void print_variable_type(struct mof_variable *variable) {
+static void print_variable_type(FILE *fout, struct mof_variable *variable) {
   char *type = NULL;
   switch (variable->variable_type) {
   case MOF_VARIABLE_BASIC:
@@ -114,26 +114,26 @@ static void print_variable_type(struct mof_variable *variable) {
   default:
     break;
   }
-  printf("%s", type ? type : "unknown");
+  fprintf(fout, "%s", type ? type : "unknown");
 }
 
-static void print_variable(struct mof_variable *variable, char *prefix) {
+static void print_variable(FILE *fout, struct mof_variable *variable, char *prefix) {
   if (variable->qualifiers_count > 0 || prefix) {
-    print_qualifiers(variable->qualifiers, variable->qualifiers_count, prefix);
-    printf(" ");
+    print_qualifiers(fout, variable->qualifiers, variable->qualifiers_count, prefix);
+    fprintf(fout, " ");
   }
-  print_variable_type(variable);
-  printf(" ");
-  print_string(variable->name);
+  print_variable_type(fout, variable);
+  fprintf(fout, " ");
+  print_string(fout, variable->name);
   if (variable->variable_type == MOF_VARIABLE_BASIC_ARRAY || variable->variable_type == MOF_VARIABLE_OBJECT_ARRAY) {
-    printf("[");
+    fprintf(fout, "[");
     if (variable->has_array_max)
-      printf("%d", variable->array_max);
-    printf("]");
+      fprintf(fout, "%d", variable->array_max);
+    fprintf(fout, "]");
   }
 }
 
-static void print_classes(struct mof_class *classes, uint32_t count) {
+static void print_classes(FILE *fout, struct mof_class *classes, uint32_t count) {
   char *direction;
   uint32_t i, j, k;
   int print_namespace = 0;
@@ -150,64 +150,64 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
     if (!classes[i].name)
       continue;
     if (print_namespace) {
-      printf("#pragma namespace(\"");
+      fprintf(fout, "#pragma namespace(\"");
       if (classes[i].namespace)
-        print_string(classes[i].namespace);
+        print_string(fout, classes[i].namespace);
       else
-        print_string("root\\default");
-      printf("\")\n");
+        print_string(fout, "root\\default");
+      fprintf(fout, "\")\n");
     }
     if (print_classflags) {
-      printf("#pragma classflags(");
+      fprintf(fout, "#pragma classflags(");
       if (classes[i].classflags == 1)
-        printf("\"updateonly\"");
+        fprintf(fout, "\"updateonly\"");
       else if (classes[i].classflags == 2)
-        printf("\"createonly\"");
+        fprintf(fout, "\"createonly\"");
       else if (classes[i].classflags == 32)
-        printf("\"safeupdate\"");
+        fprintf(fout, "\"safeupdate\"");
       else if (classes[i].classflags == 33)
-        printf("\"updateonly\", \"safeupdate\"");
+        fprintf(fout, "\"updateonly\", \"safeupdate\"");
       else if (classes[i].classflags == 64)
-        printf("\"forceupdate\"");
+        fprintf(fout, "\"forceupdate\"");
       else if (classes[i].classflags == 65)
-        printf("\"updateonly\", \"forceupdate\"");
+        fprintf(fout, "\"updateonly\", \"forceupdate\"");
       else
-        printf("%d", (int)classes[i].classflags);
-      printf(")\n");
+        fprintf(fout, "%d", (int)classes[i].classflags);
+      fprintf(fout, ")\n");
     }
     if (classes[i].qualifiers_count > 0) {
-      print_qualifiers(classes[i].qualifiers, classes[i].qualifiers_count, NULL);
-      printf("\n");
+      print_qualifiers(fout, classes[i].qualifiers, classes[i].qualifiers_count, NULL);
+      fprintf(fout, "\n");
     }
-    printf("class ");
-    print_string(classes[i].name);
-    printf(" ");
+    fprintf(fout, "class ");
+    print_string(fout, classes[i].name);
+    fprintf(fout, " ");
     if (classes[i].superclassname) {
-      printf(": ");
-      print_string(classes[i].superclassname);
-      printf(" ");
+      fprintf(fout, ": ");
+      print_string(fout, classes[i].superclassname);
+      fprintf(fout, " ");
     }
-    printf("{\n");
+    fprintf(fout, "{\n");
     for (j = 0; j < classes[i].variables_count; ++j) {
-      printf("  ");
-      print_variable(&classes[i].variables[j], NULL);
-      printf(";\n");
+      fprintf(fout, "  ");
+      print_variable(fout, &classes[i].variables[j], NULL);
+      fprintf(fout, ";\n");
     }
     if (classes[i].variables_count && classes[i].methods_count)
-      printf("\n");
+      fprintf(fout, "\n");
     for (j = 0; j < classes[i].methods_count; ++j) {
-      printf("  ");
+      fprintf(fout, "  ");
       if (classes[i].methods[j].qualifiers_count > 0) {
-        print_qualifiers(classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, NULL);
-        printf(" ");
+        print_qualifiers(fout, classes[i].methods[j].qualifiers, classes[i].methods[j].qualifiers_count, NULL);
+        fprintf(fout, " ");
       }
       if (classes[i].methods[j].return_value.variable_type)
-        print_variable_type(&classes[i].methods[j].return_value);
+        print_variable_type(fout, &classes[i].methods[j].return_value);
       else
-        printf("void");
-      printf(" ");
-      print_string(classes[i].methods[j].name);
-      printf("(");
+        fprintf(fout, "void");
+      fprintf(fout, " ");
+      print_string(fout, classes[i].methods[j].name);
+      fprintf(fout, "(");
       for (k = 0; k < classes[i].methods[j].parameters_count; ++k) {
         switch (classes[i].methods[j].parameters_direction[k]) {
         case MOF_PARAMETER_IN:
@@ -223,14 +223,14 @@ static void print_classes(struct mof_class *classes, uint32_t count) {
           direction = NULL;
           break;
         }
-        print_variable(&classes[i].methods[j].parameters[k], direction);
+        print_variable(fout, &classes[i].methods[j].parameters[k], direction);
         if (k != classes[i].methods[j].parameters_count-1)
-          printf(", ");
+          fprintf(fout, ", ");
       }
-      printf(");\n");
+      fprintf(fout, ");\n");
     }
-    printf("};\n");
+    fprintf(fout, "};\n");
     if (i != count-1)
-      printf("\n");
+      fprintf(fout, "\n");
   }
 }
